@@ -37,13 +37,9 @@ function Home() {
   const [playingSong, setPlayingSong] = useState<string>();
   const [path, setPath] = usePath();
   // Queries
-  const { isLoading, refetch, data } = useQuery(
-    ["playList", getPath(path)],
-    api.playlist,
-    {
-      enabled: false,
-    }
-  );
+  const { isLoading, refetch, data } = useQuery(["playList", getPath(path)], api.playlist, {
+    enabled: false,
+  });
   /**
    * 폴더클릭시 재조회
    */
@@ -79,8 +75,7 @@ function Home() {
    * @param dir
    * @returns
    */
-  const onClickDir = (dir: string) =>
-    setPath((prev: string[]) => [...prev, dir]);
+  const onClickDir = (dir: string) => setPath((prev: string[]) => [...prev, dir]);
   /**
    * 노래 클릭이벤트
    * @param song
@@ -98,6 +93,7 @@ function Home() {
       });
     }
   };
+  console.log(data);
   /**
    * render
    */

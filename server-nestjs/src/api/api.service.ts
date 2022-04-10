@@ -22,7 +22,10 @@ export class ApiService {
       type: 'f',
     });
 
-    return { directory: dirs, playlist: files };
+    return {
+      directory: dirs,
+      playlist: files.filter((music) => music.name !== '.gitkeep'),
+    };
   }
 
   async getDirectorys({ path, type }: IGetDirectorysProps) {

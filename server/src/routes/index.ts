@@ -1,28 +1,12 @@
 import express, { Request, Response } from "express";
-import { getDirectorys } from "../services/indexService";
-import path from "path";
+import { playlist } from "../services/indexService";
 const router = express.Router();
-const BASIC_MUSIC_PATH = "../../music/songs";
-
-// router.get("/", (req: Request, res: Response) => {
-//   res.render("index");
-// });
 
 router.get("/playlist", async (req: Request, res: Response) => {
-  let musicPath = BASIC_MUSIC_PATH;
-  if (req.query.dir !== "") {
-    musicPath = `${musicPath}/${req.query.dir}`;
-  }
-  const dirs = await getDirectorys({
-    path: path.join(__dirname, musicPath),
-    type: "d",
-  });
-  const files = await getDirectorys({
-    path: path.join(__dirname, musicPath),
-    type: "f",
-  });
+  const dir = req.query.dir as string;
+  const result = await playlist(dir);
   // res.writeHead(200, { "Content-Type": "application/json" });
-  res.json({ directory: dirs, playlist: files });
+  res.json(result);
   res.end();
 });
 export default router;
