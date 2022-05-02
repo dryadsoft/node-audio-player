@@ -23,7 +23,7 @@ export class ApiService {
     });
 
     return {
-      directory: dirs,
+      directory: dir === '00.오감별 수업 음악' ? dirs.reverse() : dirs,
       playlist: files.filter((music) => music.name !== '.gitkeep'),
     };
   }

@@ -93,7 +93,6 @@ function Home() {
       });
     }
   };
-  console.log(data);
   /**
    * render
    */
