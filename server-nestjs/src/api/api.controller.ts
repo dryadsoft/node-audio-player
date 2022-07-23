@@ -8,4 +8,9 @@ export class ApiController {
   playList(@Query('dir') dir: string) {
     return this.apiService.playList(dir);
   }
+
+  @Get('search')
+  search(@Query('keyword') keyword: string) {
+    return this.apiService.search(keyword);
+  }
 }

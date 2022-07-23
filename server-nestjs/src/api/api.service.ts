@@ -1,23 +1,25 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { IGetDirectorysProps } from './api.interface';
-import { promises as fs } from 'fs';
+import { Injectable } from '@nestjs/common';
 import { join } from 'path';
+
+import { FileService } from 'src/file/file.service';
 
 const BASIC_MUSIC_PATH = '../../music/songs';
 
 @Injectable()
 export class ApiService {
+  constructor(private readonly fileService: FileService) {}
+
   async playList(dir: string) {
     let musicPath = BASIC_MUSIC_PATH;
     if (dir !== '') {
       musicPath = `${musicPath}/${dir}`;
     }
 
-    const dirs = await this.getDirectorys({
+    const dirs = await this.fileService.getDirectorys({
       path: join(__dirname, musicPath),
       type: 'd',
     });
-    const files = await this.getDirectorys({
+    const files = await this.fileService.getDirectorys({
       path: join(__dirname, musicPath),
       type: 'f',
     });
@@ -28,20 +30,7 @@ export class ApiService {
     };
   }
 
-  async getDirectorys({ path, type }: IGetDirectorysProps) {
-    try {
-      const types = { f: 1, d: 2 };
-      const dirs = await fs.readdir(path, {
-        encoding: 'utf-8',
-        withFileTypes: true,
-      });
-
-      const filteredDirectorys = dirs.filter(
-        (obj: any) => obj[Object.getOwnPropertySymbols(obj)[0]] === types[type],
-      );
-      return filteredDirectorys;
-    } catch (err) {
-      throw new NotFoundException('디렉토리가 존재하지 않습니다.');
-    }
+  search(keyword: string) {
+    return this.fileService.getFilesByKeyword(decodeURIComponent(keyword));
   }
 }

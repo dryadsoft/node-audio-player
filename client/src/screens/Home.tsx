@@ -1,9 +1,12 @@
-import React, { useEffect, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, Fragment, useEffect, useState } from "react";
 import { useQuery } from "react-query";
 import { FcFolder, FcMusic, FcLeft } from "react-icons/fc";
+import { ChevronRightIcon, SearchIcon } from "@heroicons/react/outline";
 import { api } from "../api";
-import { usePath } from "../context/context";
+import { useKeyword, usePath } from "../context/context";
 import Loading from "../components/Loading";
+import { useNavigate } from "react-router-dom";
+import Player from "../components/Player";
 
 const getLastPath = (path: string[]) => {
   if (path.length > 0) {
@@ -11,7 +14,7 @@ const getLastPath = (path: string[]) => {
   }
   return "";
 };
-const getPath = (path: string[]) => {
+export const getPath = (path: string[]) => {
   const [_, ...rest] = path;
   if (rest.length > 0) {
     return rest.join("/");
@@ -19,69 +22,54 @@ const getPath = (path: string[]) => {
   return "";
 };
 
-const musicExt: any = {
-  mp3: "audio/mp3",
-  ogg: "audio/ogg",
-  aac: "audio/aac",
-  wma: "audio/wma",
-  wav: "audio/x-wav",
-};
-const getType = (songName: string) => {
-  const songs = songName.split(".");
-  return musicExt[songs[songs.length - 1]];
-};
-
 function Home() {
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const sourceRef = useRef<HTMLSourceElement>(null);
+  const navigate = useNavigate();
   const [playingSong, setPlayingSong] = useState<string>();
   const [path, setPath] = usePath();
+  const [keyword, setKeyword] = useKeyword();
+
   // Queries
-  const { isLoading, refetch, data } = useQuery(["playList", getPath(path)], api.playlist, {
-    enabled: false,
-  });
+  const { isLoading, refetch, data } = useQuery(
+    ["playList", getPath(path)],
+    api.playlist,
+    {
+      enabled: false,
+    }
+  );
   /**
    * 폴더클릭시 재조회
    */
   useEffect(() => {
     // if (directory) {
+    // console.log("path", path);
     refetch();
     // }
   }, [path]);
-  /**
-   * 음악재생
-   */
-  useEffect(() => {
-    if (playingSong && playingSong !== "") {
-      if (sourceRef.current) {
-        audioRef.current?.pause();
-        sourceRef.current.src = `songs${
-          getPath(path) === "" ? "" : `/${getPath(path)}`
-        }/${playingSong}`;
-        sourceRef.current.type = getType(playingSong);
-        audioRef.current?.load();
-        audioRef.current?.play();
-      }
-    }
-  }, [playingSong]);
+
   /**
    * Loading
    */
   if (isLoading) {
     return <Loading />;
   }
+
   /**
    * 디렉토리 클릭이벤트
    * @param dir
    * @returns
    */
-  const onClickDir = (dir: string) => setPath((prev: string[]) => [...prev, dir]);
+  const onClickDir = (dir: string) => {
+    // console.log(dir);
+    return setPath((prev: string[]) => [...prev, dir]);
+  };
+
   /**
    * 노래 클릭이벤트
    * @param song
    * @returns
    */
   const onClickPlaylist = (song: string) => setPlayingSong(song);
+
   /**
    * 뒤로가기
    */
@@ -93,27 +81,65 @@ function Home() {
       });
     }
   };
+
+  // 검색
+  const onChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const newWord = event.currentTarget.value;
+    setKeyword(newWord);
+  };
+
+  const onSearchClick = () => {
+    navigate(`/search`);
+  };
+
+  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    onSearchClick();
+  };
   /**
    * render
    */
   return (
     <div className="container flex flex-col w-screen h-screen mx-auto items-center bg-slate-700 text-gray-300">
       <header className="my-6 text-2xl font-bold">오감별 음악</header>
-      <div>
-        <audio ref={audioRef} preload="metadata" controls>
-          <source ref={sourceRef} src=""></source>
-        </audio>
-      </div>
-      <div className="mt-2">
-        <span>{playingSong ? playingSong : "재생중인 노래가 없습니다."}</span>
-      </div>
+      <Player playingSong={playingSong} path={getPath(path)} />
+      <form
+        onSubmit={onSubmit}
+        className="flex flex-col justify-center items-center mt-4"
+      >
+        <div className="relative">
+          <input
+            className="py-1 pl-2 pr-8 rounded-md text-gray-800 w-60"
+            type="text"
+            value={keyword}
+            onChange={onChange}
+            placeholder="노래제목을 입력하세요"
+            autoFocus={true}
+            // ref={inputKeywordRef}
+          />
+          <SearchIcon
+            className="h-8 p-1 text-gray-300 absolute top-0 right-0 cursor-pointer"
+            onClick={onSearchClick}
+          />
+        </div>
+      </form>
       <div className="self-start px-4">
         <button onClick={onClickBack}>
           <FcLeft size={40} color={"red"} />
         </button>
       </div>
-      <div className="self-start px-4 text-xl text-amber-400">
-        {getPath(path).replaceAll("/", " / ")}
+      <div className="self-start flex flex-row flex-wrap px-4 text-lg text-amber-400">
+        {/* {getPath(path).replaceAll("/", " / ")} */}
+        {getPath(path)
+          .split("/")
+          .map((name, idx) => (
+            <Fragment key={idx}>
+              <span>{name}</span>
+              {getPath(path).split("/").length > idx + 1 && (
+                <ChevronRightIcon className="h-7" />
+              )}
+            </Fragment>
+          ))}
       </div>
       <div className="overflow-y-auto self-start w-full px-4 text-xl ">
         {data?.directory.map((dir: any) => (
