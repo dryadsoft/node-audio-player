@@ -130,4 +130,20 @@ describe("Home", () => {
     fireEvent.click(screen.getByRole("button", { name: "알림 닫기" }));
     expect(screen.queryByText("‘수업 목록’ 목록을 만들었습니다.")).not.toBeInTheDocument();
   });
+
+  it("clears the search term and returns to the library", async () => {
+    renderHome();
+    const searchInput = screen.getByLabelText("노래 제목 검색");
+
+    expect(screen.queryByRole("button", { name: "검색어 지우기" })).not.toBeInTheDocument();
+    fireEvent.change(searchInput, { target: { value: "여름 노래" } });
+    fireEvent.click(screen.getByRole("button", { name: "검색" }));
+    expect(screen.getByRole("heading", { name: "검색 결과" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "검색어 지우기" }));
+    expect(searchInput).toHaveValue("");
+    expect(screen.getByRole("heading", { name: "음악 보관함" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "검색어 지우기" })).not.toBeInTheDocument();
+    expect(searchInput).toHaveFocus();
+  });
 });

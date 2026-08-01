@@ -222,11 +222,38 @@ select {
   padding: 0 34px 0 10px;
 }
 
-.search-form input {
+.search-input-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+.search-input-wrap input {
+  width: 100%;
   min-height: 36px;
-  padding: 0;
+  padding: 0 40px 0 0;
   border: 0;
   background: transparent;
+}
+
+.search-clear {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  display: inline-grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.search-clear:hover {
+  background: var(--panel-soft);
+  color: var(--ink);
 }
 
 .button,

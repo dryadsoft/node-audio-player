@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   closestCenter,
   DndContext,
@@ -88,6 +88,7 @@ const LibraryTrackRow = ({ track, added, onPlay, onAdd }: LibraryTrackRowProps) 
 
 function Home() {
   const queryClient = useQueryClient();
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [path, setPath] = useState<string[]>([]);
   const [keyword, setKeyword] = useState("");
   const [searchActive, setSearchActive] = useState(false);
@@ -298,6 +299,12 @@ function Home() {
     searchQuery.refetch();
   };
 
+  const clearSearch = () => {
+    setKeyword("");
+    setSearchActive(false);
+    searchInputRef.current?.focus();
+  };
+
   const submitCreate = (event: FormEvent) => {
     event.preventDefault();
     if (newTitle.trim()) {
@@ -382,15 +389,28 @@ function Home() {
 
             <form className="search-form" onSubmit={submitSearch} role="search">
               <FiSearch />
-              <input
-                value={keyword}
-                onChange={(event) => {
-                  setKeyword(event.target.value);
-                  if (!event.target.value) setSearchActive(false);
-                }}
-                placeholder="노래 제목 검색"
-                aria-label="노래 제목 검색"
-              />
+              <div className="search-input-wrap">
+                <input
+                  ref={searchInputRef}
+                  value={keyword}
+                  onChange={(event) => {
+                    setKeyword(event.target.value);
+                    if (!event.target.value) setSearchActive(false);
+                  }}
+                  placeholder="노래 제목 검색"
+                  aria-label="노래 제목 검색"
+                />
+                {keyword ? (
+                  <button
+                    type="button"
+                    className="search-clear"
+                    aria-label="검색어 지우기"
+                    onClick={clearSearch}
+                  >
+                    <FiX />
+                  </button>
+                ) : null}
+              </div>
               <button type="submit" className="button accent">검색</button>
             </form>
 
