@@ -1,168 +1,512 @@
-import { ChangeEvent, FormEvent, Fragment, useEffect, useState } from "react";
-import { useQuery } from "react-query";
-import { FcFolder, FcMusic, FcLeft } from "react-icons/fc";
-import { ChevronRightIcon, SearchIcon } from "@heroicons/react/outline";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  closestCenter,
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  KeyboardSensor,
+  PointerSensor,
+  useDraggable,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+import { FiArrowLeft, FiFolder, FiMusic, FiPlus, FiSearch } from "react-icons/fi";
+import { MdDragIndicator } from "react-icons/md";
+import { useMutation, useQuery, useQueryClient } from "react-query";
 import { api } from "../api";
-import { useKeyword, usePath } from "../context/context";
-import Loading from "../components/Loading";
-import { useNavigate } from "react-router-dom";
 import Player from "../components/Player";
+import Playlist from "../components/Playlist";
+import { LibraryResponse, PlaylistTrack, SavedPlaylist, TrackReference } from "../types";
 
-const getLastPath = (path: string[]) => {
-  if (path.length > 0) {
-    return path[path.length - 1];
-  }
-  return "";
-};
-export const getPath = (path: string[]) => {
-  const [_, ...rest] = path;
-  if (rest.length > 0) {
-    return rest.join("/");
-  }
-  return "";
+const getName = (path: string) => path.substring(path.lastIndexOf("/") + 1);
+const getDirectory = (path: string) =>
+  path.includes("/") ? path.substring(0, path.lastIndexOf("/")) : "";
+
+interface LibraryTrackRowProps {
+  track: TrackReference;
+  added: boolean;
+  onPlay: () => void;
+  onAdd: () => void;
+}
+
+const LibraryTrackRow = ({ track, added, onPlay, onAdd }: LibraryTrackRowProps) => {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: `library:${track.path}`,
+    data: { type: "library", path: track.path, name: track.name },
+  });
+
+  return (
+    <li
+      ref={setNodeRef}
+      className={`track-row library-track ${isDragging ? "is-dragging" : ""}`}
+      style={
+        transform
+          ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
+          : undefined
+      }
+    >
+      <button
+        type="button"
+        className="drag-handle desktop-drag-handle"
+        aria-label={`${track.name} 재생목록으로 드래그`}
+        {...attributes}
+        {...listeners}
+      >
+        <MdDragIndicator />
+      </button>
+      <button type="button" className="track-main" onClick={onPlay}>
+        <span className="track-name"><FiMusic /> {track.name}</span>
+        <span className="track-path">{track.path}</span>
+      </button>
+      <button
+        type="button"
+        className={`icon-button ${added ? "is-added" : "accent"}`}
+        aria-label={added ? `${track.name} 추가됨` : `${track.name} 추가`}
+        onClick={onAdd}
+        disabled={added}
+      >
+        {added ? "✓" : <FiPlus />}
+      </button>
+    </li>
+  );
 };
 
 function Home() {
-  const navigate = useNavigate();
-  const [playingSong, setPlayingSong] = useState<string>();
-  const [path, setPath] = usePath();
-  const [keyword, setKeyword] = useKeyword();
+  const queryClient = useQueryClient();
+  const [path, setPath] = useState<string[]>([]);
+  const [keyword, setKeyword] = useState("");
+  const [searchActive, setSearchActive] = useState(false);
+  const [playingTrack, setPlayingTrack] = useState<TrackReference>();
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState("");
+  const [mobileTab, setMobileTab] = useState<"library" | "playlists">("library");
+  const [status, setStatus] = useState("");
+  const [activeDragName, setActiveDragName] = useState("");
+  const [createDialog, setCreateDialog] = useState<{ open: boolean; path?: string }>({
+    open: false,
+  });
+  const [newTitle, setNewTitle] = useState("");
 
-  // Queries
-  const { isLoading, refetch, data } = useQuery(
-    ["playList", getPath(path)],
-    api.playlist,
+  const directory = path.join("/");
+  const libraryQuery = useQuery<LibraryResponse>(
+    ["playList", directory],
+    api.playlist
+  );
+  const searchQuery = useQuery<string[]>(["search", keyword], api.search, {
+    enabled: false,
+  });
+  const playlistsQuery = useQuery<SavedPlaylist[]>("playlists", api.playlists);
+  const playlists = useMemo(() => playlistsQuery.data || [], [playlistsQuery.data]);
+  const selectedPlaylist = playlists.find(
+    (playlist) => playlist.id === selectedPlaylistId
+  );
+
+  useEffect(() => {
+    if (!selectedPlaylist && playlists.length > 0) {
+      setSelectedPlaylistId(playlists[0].id);
+    }
+  }, [playlists, selectedPlaylist]);
+
+  const replacePlaylist = (updated: SavedPlaylist) => {
+    queryClient.setQueryData<SavedPlaylist[]>("playlists", (current = []) =>
+      current.map((playlist) => (playlist.id === updated.id ? updated : playlist))
+    );
+  };
+
+  const showError = (error: unknown) => {
+    setStatus(error instanceof Error ? error.message : "요청을 처리하지 못했습니다.");
+  };
+
+  const createMutation = useMutation(
+    async ({ title, pendingPath }: { title: string; pendingPath?: string }) => {
+      const playlist = await api.createPlaylist(title);
+      return pendingPath
+        ? api.addTrack({ id: playlist.id, path: pendingPath })
+        : playlist;
+    },
     {
-      enabled: false,
+      onSuccess: (playlist) => {
+        queryClient.setQueryData<SavedPlaylist[]>("playlists", (current = []) => [
+          ...current,
+          playlist,
+        ]);
+        setSelectedPlaylistId(playlist.id);
+        setCreateDialog({ open: false });
+        setNewTitle("");
+        setStatus(`‘${playlist.title}’ 목록을 만들었습니다.`);
+      },
+      onError: showError,
     }
   );
-  /**
-   * 폴더클릭시 재조회
-   */
-  useEffect(() => {
-    // if (directory) {
-    // console.log("path", path);
-    refetch();
-    // }
-  }, [path]);
 
-  /**
-   * Loading
-   */
-  if (isLoading) {
-    return <Loading />;
-  }
+  const addMutation = useMutation(api.addTrack, {
+    onSuccess: (playlist) => {
+      replacePlaylist(playlist);
+      setStatus("선택한 목록에 곡을 추가했습니다.");
+    },
+    onError: showError,
+  });
+  const removeMutation = useMutation(api.removeTrack, {
+    onSuccess: replacePlaylist,
+    onError: showError,
+  });
+  const renameMutation = useMutation(api.renamePlaylist, {
+    onSuccess: (playlist) => {
+      replacePlaylist(playlist);
+      setStatus("재생목록 제목을 변경했습니다.");
+    },
+    onError: showError,
+  });
+  const deleteMutation = useMutation(api.deletePlaylist, {
+    onSuccess: (_, id) => {
+      queryClient.setQueryData<SavedPlaylist[]>("playlists", (current = []) =>
+        current.filter((playlist) => playlist.id !== id)
+      );
+      setSelectedPlaylistId("");
+      setStatus("재생목록을 삭제했습니다.");
+    },
+    onError: showError,
+  });
+  const reorderMutation = useMutation(api.reorderTracks, {
+    onMutate: async ({ id, paths }) => {
+      await queryClient.cancelQueries("playlists");
+      const previous = queryClient.getQueryData<SavedPlaylist[]>("playlists");
+      queryClient.setQueryData<SavedPlaylist[]>("playlists", (current = []) =>
+        current.map((playlist) =>
+          playlist.id === id
+            ? {
+                ...playlist,
+                tracks: paths
+                  .map((trackPath) => playlist.tracks.find((track) => track.path === trackPath))
+                  .filter((track): track is PlaylistTrack => Boolean(track)),
+              }
+            : playlist
+        )
+      );
+      return { previous };
+    },
+    onError: (error, _variables, context) => {
+      const previous = (context as { previous?: SavedPlaylist[] } | undefined)
+        ?.previous;
+      if (previous) {
+        queryClient.setQueryData("playlists", previous);
+      }
+      showError(error);
+    },
+    onSuccess: replacePlaylist,
+  });
 
-  /**
-   * 디렉토리 클릭이벤트
-   * @param dir
-   * @returns
-   */
-  const onClickDir = (dir: string) => {
-    // console.log(dir);
-    return setPath((prev: string[]) => [...prev, dir]);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const tracks = useMemo<TrackReference[]>(() => {
+    if (searchActive) {
+      return (searchQuery.data || []).map((trackPath) => ({
+        path: trackPath,
+        name: getName(trackPath),
+      }));
+    }
+    return (libraryQuery.data?.playlist || []).map(({ name }) => ({
+      name,
+      path: directory ? `${directory}/${name}` : name,
+    }));
+  }, [directory, libraryQuery.data?.playlist, searchActive, searchQuery.data]);
+
+  const addTrack = (trackPath: string) => {
+    if (!selectedPlaylist) {
+      setCreateDialog({ open: true, path: trackPath });
+      return;
+    }
+    if (selectedPlaylist.tracks.some((track) => track.path === trackPath)) {
+      setStatus("이미 선택한 목록에 있는 곡입니다.");
+      return;
+    }
+    addMutation.mutate({ id: selectedPlaylist.id, path: trackPath });
   };
 
-  /**
-   * 노래 클릭이벤트
-   * @param song
-   * @returns
-   */
-  const onClickPlaylist = (song: string) => setPlayingSong(song);
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveDragName(String(event.active.data.current?.name || getName(String(event.active.data.current?.path || ""))));
+  };
 
-  /**
-   * 뒤로가기
-   */
-  const onClickBack = () => {
-    if (path.length > 1) {
-      setPath((prev: string[]) => {
-        const filtered = prev.filter((dir) => dir !== getLastPath(path));
-        return filtered;
-      });
+  const handleDragEnd = (event: DragEndEvent) => {
+    setActiveDragName("");
+    const { active, over } = event;
+    if (!over) return;
+    const type = active.data.current?.type;
+    const trackPath = String(active.data.current?.path || "");
+    if (type === "library") {
+      addTrack(trackPath);
+      return;
+    }
+    if (type === "saved" && selectedPlaylist && over.id !== active.id) {
+      const oldIndex = selectedPlaylist.tracks.findIndex(
+        (track) => `saved:${track.path}` === active.id
+      );
+      const newIndex = selectedPlaylist.tracks.findIndex(
+        (track) => `saved:${track.path}` === over.id
+      );
+      if (oldIndex >= 0 && newIndex >= 0) {
+        const ordered = arrayMove(selectedPlaylist.tracks, oldIndex, newIndex).map(
+          (track) => track.path
+        );
+        reorderMutation.mutate({ id: selectedPlaylist.id, paths: ordered });
+      }
     }
   };
 
-  // 검색
-  const onChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const newWord = event.currentTarget.value;
-    setKeyword(newWord);
-  };
-
-  const onSearchClick = () => {
-    navigate(`/search`);
-  };
-
-  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const submitSearch = (event: FormEvent) => {
     event.preventDefault();
-    onSearchClick();
+    if (!keyword.trim()) {
+      setSearchActive(false);
+      return;
+    }
+    setSearchActive(true);
+    searchQuery.refetch();
   };
-  /**
-   * render
-   */
+
+  const submitCreate = (event: FormEvent) => {
+    event.preventDefault();
+    if (newTitle.trim()) {
+      createMutation.mutate({ title: newTitle, pendingPath: createDialog.path });
+    }
+  };
+
+  const busy =
+    createMutation.isLoading ||
+    addMutation.isLoading ||
+    removeMutation.isLoading ||
+    renameMutation.isLoading ||
+    deleteMutation.isLoading ||
+    reorderMutation.isLoading;
+
   return (
-    <div className="container flex flex-col w-screen h-screen mx-auto items-center bg-slate-700 text-gray-300">
-      <header className="my-6 text-2xl font-bold">오감별 음악</header>
-      <Player playingSong={playingSong} path={getPath(path)} />
-      <form
-        onSubmit={onSubmit}
-        className="flex flex-col justify-center items-center mt-4"
-      >
-        <div className="relative">
-          <input
-            className="py-1 pl-2 pr-8 rounded-md text-gray-800 w-60"
-            type="text"
-            value={keyword}
-            onChange={onChange}
-            placeholder="노래제목을 입력하세요"
-            autoFocus={true}
-            // ref={inputKeywordRef}
-          />
-          <SearchIcon
-            className="h-8 p-1 text-gray-300 absolute top-0 right-0 cursor-pointer"
-            onClick={onSearchClick}
-          />
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragCancel={() => setActiveDragName("")}
+    >
+      <main className="app-shell">
+        <header className="player-header">
+          <div className="brand-block">
+            <span className="brand-mark">OG</span>
+            <div>
+              <span className="eyebrow">MUSIC LIBRARY</span>
+              <h1>오감별 음악</h1>
+            </div>
+          </div>
+          <div className="player-block">
+            <Player
+              playingSong={playingTrack?.name}
+              path={playingTrack ? getDirectory(playingTrack.path) : ""}
+            />
+          </div>
+        </header>
+
+        <nav className="mobile-tabs" aria-label="작업 영역">
+          <button
+            className={mobileTab === "library" ? "active" : ""}
+            onClick={() => setMobileTab("library")}
+          >
+            음악 보관함
+          </button>
+          <button
+            className={mobileTab === "playlists" ? "active" : ""}
+            onClick={() => setMobileTab("playlists")}
+          >
+            내 재생목록
+          </button>
+        </nav>
+
+        <div className="workspace">
+          <section
+            className={`library-panel ${mobileTab === "library" ? "mobile-active" : ""}`}
+            aria-label="음악 보관함"
+          >
+            <div className="panel-heading">
+              <div>
+                <span className="eyebrow">SOURCE LIBRARY</span>
+                <h2>{searchActive ? "검색 결과" : "음악 보관함"}</h2>
+              </div>
+              <div className="mobile-target">
+                <label htmlFor="target-playlist">추가할 목록</label>
+                <select
+                  id="target-playlist"
+                  value={selectedPlaylistId}
+                  onChange={(event) => setSelectedPlaylistId(event.target.value)}
+                >
+                  <option value="">새 목록 만들기</option>
+                  {playlists.map((playlist) => (
+                    <option key={playlist.id} value={playlist.id}>
+                      {playlist.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <form className="search-form" onSubmit={submitSearch} role="search">
+              <FiSearch />
+              <input
+                value={keyword}
+                onChange={(event) => {
+                  setKeyword(event.target.value);
+                  if (!event.target.value) setSearchActive(false);
+                }}
+                placeholder="노래 제목 검색"
+                aria-label="노래 제목 검색"
+              />
+              <button type="submit" className="button accent">검색</button>
+            </form>
+
+            {!searchActive ? (
+              <div className="path-toolbar">
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label="상위 폴더"
+                  onClick={() => setPath((current) => current.slice(0, -1))}
+                  disabled={path.length === 0}
+                >
+                  <FiArrowLeft />
+                </button>
+                <div className="breadcrumb">
+                  <button type="button" onClick={() => setPath([])}>음악</button>
+                  {path.map((segment, index) => (
+                    <span key={`${segment}-${index}`}>
+                      <b>/</b>
+                      <button type="button" onClick={() => setPath(path.slice(0, index + 1))}>
+                        {segment}
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <button type="button" className="back-to-library" onClick={() => setSearchActive(false)}>
+                <FiArrowLeft /> 폴더 탐색으로 돌아가기
+              </button>
+            )}
+
+            <div className="library-scroll">
+              {libraryQuery.isLoading || (searchActive && searchQuery.isFetching) ? (
+                <div className="loading-state">음악 목록을 불러오는 중...</div>
+              ) : null}
+              {!searchActive
+                ? libraryQuery.data?.directory.map((folder) => (
+                    <button
+                      type="button"
+                      className="folder-row"
+                      key={folder.name}
+                      onClick={() => setPath((current) => [...current, folder.name])}
+                    >
+                      <FiFolder />
+                      <span>{folder.name}</span>
+                      <b>열기</b>
+                    </button>
+                  ))
+                : null}
+              <ul className="track-list">
+                {tracks.map((track) => (
+                  <LibraryTrackRow
+                    key={track.path}
+                    track={track}
+                    added={Boolean(
+                      selectedPlaylist?.tracks.some((item) => item.path === track.path)
+                    )}
+                    onPlay={() => setPlayingTrack(track)}
+                    onAdd={() => addTrack(track.path)}
+                  />
+                ))}
+              </ul>
+              {tracks.length === 0 && !libraryQuery.isLoading && !searchQuery.isFetching ? (
+                <div className="empty-state small">
+                  <FiMusic />
+                  <strong>{searchActive ? "검색 결과가 없습니다." : "이 폴더에 음악이 없습니다."}</strong>
+                </div>
+              ) : null}
+            </div>
+          </section>
+
+          <div className={`playlist-column ${mobileTab === "playlists" ? "mobile-active" : ""}`}>
+            <Playlist
+              playlists={playlists}
+              selectedPlaylist={selectedPlaylist}
+              busy={busy}
+              onSelect={setSelectedPlaylistId}
+              onOpenCreate={() => setCreateDialog({ open: true })}
+              onRename={(title) =>
+                selectedPlaylist && renameMutation.mutate({ id: selectedPlaylist.id, title })
+              }
+              onDelete={() => {
+                if (
+                  selectedPlaylist &&
+                  window.confirm(`‘${selectedPlaylist.title}’ 목록을 삭제할까요?`)
+                ) {
+                  deleteMutation.mutate(selectedPlaylist.id);
+                }
+              }}
+              onRemoveTrack={(trackPath) =>
+                selectedPlaylist &&
+                removeMutation.mutate({ id: selectedPlaylist.id, path: trackPath })
+              }
+              onPlay={(track) => setPlayingTrack(track)}
+            />
+          </div>
         </div>
-      </form>
-      <div className="self-start px-4">
-        <button onClick={onClickBack}>
-          <FcLeft size={40} color={"red"} />
-        </button>
-      </div>
-      <div className="self-start flex flex-row flex-wrap px-4 text-lg text-amber-400">
-        {/* {getPath(path).replaceAll("/", " / ")} */}
-        {getPath(path)
-          .split("/")
-          .map((name, idx) => (
-            <Fragment key={idx}>
-              <span>{name}</span>
-              {getPath(path).split("/").length > idx + 1 && (
-                <ChevronRightIcon className="h-7" />
-              )}
-            </Fragment>
-          ))}
-      </div>
-      <div className="overflow-y-auto self-start w-full px-4 text-xl ">
-        {data?.directory.map((dir: any) => (
-          <div
-            key={dir.name}
-            className="truncate odd:bg-slate-900 even:bg-slate-800  rounded-sm cursor-pointer hover:bg-slate-400 hover:text-slate-800 p-2"
-            onClick={() => onClickDir(dir.name)}
-          >
-            <FcFolder className="inline-block" /> {dir.name}
+
+        <div className={`status-message ${status ? "visible" : ""}`} aria-live="polite">
+          {status}
+        </div>
+
+        {createDialog.open ? (
+          <div className="modal-backdrop" role="presentation">
+            <section
+              className="dialog-card"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="create-playlist-title"
+            >
+              <span className="eyebrow">NEW COLLECTION</span>
+              <h2 id="create-playlist-title">새 재생목록</h2>
+              {createDialog.path ? <p>목록을 만들면 선택한 곡이 바로 추가됩니다.</p> : null}
+              <form onSubmit={submitCreate}>
+                <label htmlFor="new-playlist-title">목록 제목</label>
+                <input
+                  id="new-playlist-title"
+                  value={newTitle}
+                  onChange={(event) => setNewTitle(event.target.value)}
+                  autoFocus
+                  placeholder="예: 아침 수업 음악"
+                />
+                <div className="dialog-actions">
+                  <button
+                    type="button"
+                    className="button ghost"
+                    onClick={() => {
+                      setCreateDialog({ open: false });
+                      setNewTitle("");
+                    }}
+                  >
+                    취소
+                  </button>
+                  <button className="button accent" type="submit" disabled={createMutation.isLoading}>
+                    만들기
+                  </button>
+                </div>
+              </form>
+            </section>
           </div>
-        ))}
-        {data?.playlist.map((file: any) => (
-          <div
-            key={file.name}
-            className="truncate odd:bg-slate-900 even:bg-slate-800  rounded-sm cursor-pointer hover:bg-slate-400 hover:text-slate-800 p-2"
-            onClick={() => onClickPlaylist(file.name)}
-          >
-            <FcMusic className="inline-block" /> {file.name}
-          </div>
-        ))}
-      </div>
-      <footer className="mt-10">Copyright © 2022 Dryadsoft</footer>
-    </div>
+        ) : null}
+      </main>
+      <DragOverlay>
+        {activeDragName ? <div className="drag-overlay"><FiMusic /> {activeDragName}</div> : null}
+      </DragOverlay>
+    </DndContext>
   );
 }
 

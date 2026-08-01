@@ -36,4 +36,8 @@ lerna-debug.log*
 
 # 음악폴더
 music/songs/*
-!*.gitkeep
+!music/songs/.gitkeep
+
+# Runtime playlist data
+/data/playlists.json
+/data/.playlists-*.tmp

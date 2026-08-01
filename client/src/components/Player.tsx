@@ -12,6 +12,11 @@ const getType = (songName: string) => {
   return musicExt[songs[songs.length - 1]];
 };
 
+const encodeMusicPath = (path: string, songName: string) =>
+  ["songs", ...path.split("/").filter(Boolean), songName]
+    .map(encodeURIComponent)
+    .join("/");
+
 interface IPlayerProps {
   playingSong: string | undefined;
   path: any;
@@ -27,24 +32,22 @@ const Player: React.FC<IPlayerProps> = ({ playingSong, path }) => {
     if (playingSong && playingSong !== "") {
       if (sourceRef.current) {
         audioRef.current?.pause();
-        sourceRef.current.src = `songs${
-          path === "" ? "" : `/${path}`
-        }/${playingSong}`;
+        sourceRef.current.src = `/${encodeMusicPath(path, playingSong)}`;
         sourceRef.current.type = getType(playingSong);
         audioRef.current?.load();
         audioRef.current?.play();
       }
     }
-  }, [playingSong]);
+  }, [path, playingSong]);
 
   return (
     <>
-      <div>
+      <div className="player-controls">
         <audio ref={audioRef} preload="metadata" controls>
-          <source ref={sourceRef} src=""></source>
+          <source ref={sourceRef} src="" />
         </audio>
       </div>
-      <div className="mt-2">
+      <div className="now-playing" aria-live="polite">
         <span>{playingSong ? playingSong : "재생중인 노래가 없습니다."}</span>
       </div>
     </>

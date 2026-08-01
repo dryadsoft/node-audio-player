@@ -4,6 +4,7 @@ import { join } from 'path';
 import { ApiModule } from './api/api.module';
 import { CommonModule } from './common/common.module';
 import { FileModule } from './file/file.module';
+import { PlaylistModule } from './playlist/playlist.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { FileModule } from './file/file.module';
     ApiModule,
     CommonModule,
     FileModule,
+    PlaylistModule,
   ],
   controllers: [],
   providers: [],
