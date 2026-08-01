@@ -614,6 +614,9 @@ select {
   bottom: 22px;
   z-index: 60;
   max-width: min(380px, calc(100vw - 40px));
+  display: flex;
+  align-items: center;
+  gap: 12px;
   padding: 11px 15px;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -627,7 +630,35 @@ select {
 
 .status-message.visible {
   opacity: 1;
+  pointer-events: auto;
   transform: translateY(0);
+}
+
+.status-message > span {
+  min-width: 0;
+  flex: 1;
+}
+
+.status-message.error {
+  border-color: rgba(238, 122, 112, 0.6);
+}
+
+.notice-close {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.notice-close:hover {
+  background: var(--panel-soft);
+  color: var(--ink);
 }
 
 .modal-backdrop {

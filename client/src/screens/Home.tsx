@@ -12,7 +12,14 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { FiArrowLeft, FiFolder, FiMusic, FiPlus, FiSearch } from "react-icons/fi";
+import {
+  FiArrowLeft,
+  FiFolder,
+  FiMusic,
+  FiPlus,
+  FiSearch,
+  FiX,
+} from "react-icons/fi";
 import { MdDragIndicator } from "react-icons/md";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { api } from "../api";
@@ -29,6 +36,12 @@ interface LibraryTrackRowProps {
   added: boolean;
   onPlay: () => void;
   onAdd: () => void;
+}
+
+interface Notice {
+  id: number;
+  message: string;
+  type: "success" | "error";
 }
 
 const LibraryTrackRow = ({ track, added, onPlay, onAdd }: LibraryTrackRowProps) => {
@@ -81,7 +94,7 @@ function Home() {
   const [playingTrack, setPlayingTrack] = useState<TrackReference>();
   const [selectedPlaylistId, setSelectedPlaylistId] = useState("");
   const [mobileTab, setMobileTab] = useState<"library" | "playlists">("library");
-  const [status, setStatus] = useState("");
+  const [notice, setNotice] = useState<Notice>();
   const [activeDragName, setActiveDragName] = useState("");
   const [createDialog, setCreateDialog] = useState<{ open: boolean; path?: string }>({
     open: false,
@@ -108,14 +121,32 @@ function Home() {
     }
   }, [playlists, selectedPlaylist]);
 
+  useEffect(() => {
+    if (!notice) return;
+
+    const timeout = window.setTimeout(
+      () =>
+        setNotice((current) => (current?.id === notice.id ? undefined : current)),
+      notice.type === "success" ? 3000 : 5000
+    );
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+
   const replacePlaylist = (updated: SavedPlaylist) => {
     queryClient.setQueryData<SavedPlaylist[]>("playlists", (current = []) =>
       current.map((playlist) => (playlist.id === updated.id ? updated : playlist))
     );
   };
 
+  const showNotice = (message: string, type: Notice["type"] = "success") => {
+    setNotice({ id: Date.now(), message, type });
+  };
+
   const showError = (error: unknown) => {
-    setStatus(error instanceof Error ? error.message : "요청을 처리하지 못했습니다.");
+    showNotice(
+      error instanceof Error ? error.message : "요청을 처리하지 못했습니다.",
+      "error"
+    );
   };
 
   const createMutation = useMutation(
@@ -134,7 +165,7 @@ function Home() {
         setSelectedPlaylistId(playlist.id);
         setCreateDialog({ open: false });
         setNewTitle("");
-        setStatus(`‘${playlist.title}’ 목록을 만들었습니다.`);
+        showNotice(`‘${playlist.title}’ 목록을 만들었습니다.`);
       },
       onError: showError,
     }
@@ -143,7 +174,7 @@ function Home() {
   const addMutation = useMutation(api.addTrack, {
     onSuccess: (playlist) => {
       replacePlaylist(playlist);
-      setStatus("선택한 목록에 곡을 추가했습니다.");
+      showNotice("선택한 목록에 곡을 추가했습니다.");
     },
     onError: showError,
   });
@@ -154,7 +185,7 @@ function Home() {
   const renameMutation = useMutation(api.renamePlaylist, {
     onSuccess: (playlist) => {
       replacePlaylist(playlist);
-      setStatus("재생목록 제목을 변경했습니다.");
+      showNotice("재생목록 제목을 변경했습니다.");
     },
     onError: showError,
   });
@@ -164,7 +195,7 @@ function Home() {
         current.filter((playlist) => playlist.id !== id)
       );
       setSelectedPlaylistId("");
-      setStatus("재생목록을 삭제했습니다.");
+      showNotice("재생목록을 삭제했습니다.");
     },
     onError: showError,
   });
@@ -221,7 +252,7 @@ function Home() {
       return;
     }
     if (selectedPlaylist.tracks.some((track) => track.path === trackPath)) {
-      setStatus("이미 선택한 목록에 있는 곡입니다.");
+      showNotice("이미 선택한 목록에 있는 곡입니다.", "error");
       return;
     }
     addMutation.mutate({ id: selectedPlaylist.id, path: trackPath });
@@ -459,8 +490,24 @@ function Home() {
           </div>
         </div>
 
-        <div className={`status-message ${status ? "visible" : ""}`} aria-live="polite">
-          {status}
+        <div
+          className={`status-message ${notice ? "visible" : ""} ${
+            notice?.type || ""
+          }`}
+          role={notice?.type === "error" ? "alert" : "status"}
+          aria-live={notice?.type === "error" ? "assertive" : "polite"}
+        >
+          <span>{notice?.message}</span>
+          {notice ? (
+            <button
+              type="button"
+              className="notice-close"
+              aria-label="알림 닫기"
+              onClick={() => setNotice(undefined)}
+            >
+              <FiX />
+            </button>
+          ) : null}
         </div>
 
         {createDialog.open ? (
