@@ -41,3 +41,6 @@ music/songs/*
 # Runtime playlist data
 /data/playlists.json
 /data/.playlists-*.tmp
+
+# Generated audio cache
+/data/audio-cache/
