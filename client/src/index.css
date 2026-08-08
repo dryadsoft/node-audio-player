@@ -152,6 +152,14 @@ h2 {
   white-space: nowrap;
 }
 
+.now-playing.preparing {
+  color: var(--accent);
+}
+
+.now-playing.error {
+  color: #ff9b8f;
+}
+
 .workspace {
   display: grid;
   grid-template-columns: minmax(360px, 0.92fr) minmax(520px, 1.08fr);

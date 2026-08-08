@@ -28,8 +28,6 @@ import Playlist from "../components/Playlist";
 import { LibraryResponse, PlaylistTrack, SavedPlaylist, TrackReference } from "../types";
 
 const getName = (path: string) => path.substring(path.lastIndexOf("/") + 1);
-const getDirectory = (path: string) =>
-  path.includes("/") ? path.substring(0, path.lastIndexOf("/")) : "";
 
 interface LibraryTrackRowProps {
   track: TrackReference;
@@ -338,10 +336,7 @@ function Home() {
             </div>
           </div>
           <div className="player-block">
-            <Player
-              playingSong={playingTrack?.name}
-              path={playingTrack ? getDirectory(playingTrack.path) : ""}
-            />
+            <Player track={playingTrack} />
           </div>
         </header>
 
