@@ -53,8 +53,9 @@ listen 127.0.0.1:8080 default_server;
 listen [::1]:8080 default_server;
 ```
 
-`/api/`와 `/songs/`만 NestJS의 `127.0.0.1:4000`으로 전달한다. 오디오
-재생을 위해 `Range`, `If-Range`, `proxy_buffering off` 설정을 유지한다.
+`/api/`, `/api/audio`, `/songs/`를 NestJS의 `127.0.0.1:4000`으로 전달한다.
+오디오 재생을 위해 `Range`, `If-Range`, `proxy_buffering off` 설정을
+유지한다.
 
 ## 2. 로컬 빌드와 테스트
 
@@ -66,6 +67,7 @@ npm ci
 npm run build
 npm test -- --runInBand --no-watchman
 npm run test:e2e -- --runInBand --no-watchman
+command -v ffmpeg
 
 cd ../client
 npm ci
@@ -106,6 +108,8 @@ sudo ss -ltnp
 sudo nginx -T
 pm2 status
 pm2 describe nmp
+command -v ffmpeg
+df -h /home/pi/workspace/node-audio-player/server-nestjs
 sudo systemctl status ssh --no-pager
 ```
 
@@ -171,6 +175,8 @@ NVM을 사용한다면 해당 Node 버전의 `bin`과 PM2 경로를 `PATH`에 �
 ```sh
 export PATH=/home/pi/.nvm/versions/node/v16.18.1/bin:/home/pi/.yarn-global/bin:/usr/local/bin:/usr/bin:/bin
 cd /home/pi/workspace/node-audio-player/server-nestjs
+mkdir -p data/audio-cache
+export AUDIO_CACHE_PATH="$PWD/data/audio-cache"
 npm run build
 pm2 restart nmp --update-env
 pm2 save
@@ -364,7 +370,7 @@ API 또는 오디오 응답의 `cf-cache-status`가 `DYNAMIC`인지 확인한다
 2. 허용 계정으로 로그인하면 음악 보관함이 열린다.
 3. 한글, 공백, 중첩 폴더 검색이 동작한다.
 4. 재생목록 조회·생성·삭제가 동작한다.
-5. 노래 재생과 탐색이 동작한다.
+5. WMA를 선택하면 `WMA 재생 준비 중` 표시 후 자동 재생되고 탐색이 동작한다.
 6. 비허용 Google 계정은 Access에서 거부된다.
 
 서버/API 검증 기준:
@@ -382,6 +388,18 @@ Range 요청 예시:
 curl -H 'Range: bytes=0-1' -D - -o /dev/null \
   'https://music.example.com/songs/<URL-ENCODED-PATH>'
 ```
+
+WMA 캐시 재생은 `path` 전체를 query 값으로 URL 인코딩한다.
+
+```sh
+curl --get --data-urlencode 'path=<RELATIVE-WMA-PATH>' \
+  -H 'Range: bytes=0-1' -D - -o /dev/null \
+  'https://music.example.com/api/audio'
+```
+
+최초 요청 후 `data/audio-cache/`에 MP3와 메타데이터가 생성되어야 한다.
+두 번째 요청에서는 캐시 파일 수정시간이 바뀌지 않아야 한다. 응답은
+`206 Partial Content`, `Content-Type: audio/mpeg`이어야 한다.
 
 이 명령은 Access 인증 쿠키가 없는 터미널에서는 로그인 리디렉션을 받는다.
 실제 Range 검증은 로그인된 브라우저 개발자 도구나 인증 쿠키가 있는 요청으로

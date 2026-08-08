@@ -23,6 +23,8 @@ cd /home/pi/workspace/node-audio-player
 test -d client/build
 test -d server-nestjs/dist
 pm2 describe nmp
+command -v ffmpeg
+df -h /home/pi/workspace/node-audio-player/server-nestjs
 sudo nginx -T
 sudo ss -ltnp
 ```
@@ -48,6 +50,8 @@ Build both active applications. Restart PM2 only after the NestJS build passes.
 ```sh
 cd /home/pi/workspace/node-audio-player/server-nestjs
 npm ci --include=dev
+mkdir -p data/audio-cache
+export AUDIO_CACHE_PATH="$PWD/data/audio-cache"
 npm run build
 npm test -- --runInBand
 npm run test:e2e -- --runInBand
@@ -77,6 +81,19 @@ curl -fsS http://127.0.0.1:8080/api/playlists
 curl -fsSI http://127.0.0.1:8080/
 sudo ss -ltnp
 ```
+
+For WMA playback, URL-encode the path as one query value and verify the first
+request creates the cache. The second request must reuse the same MP3 file.
+
+```sh
+curl --get --data-urlencode 'path=<RELATIVE-WMA-PATH>' \
+  -H 'Range: bytes=0-1' -D - -o /dev/null \
+  http://127.0.0.1:8080/api/audio
+```
+
+Expected response: `206 Partial Content`, `Content-Type: audio/mpeg`, and
+`Accept-Ranges: bytes`. Keep `AUDIO_CACHE_PATH` in the PM2 environment when
+restarting with `pm2 restart nmp --update-env`.
 
 NestJS must listen only on `127.0.0.1:4000`. The new Nginx site must listen
 only on `127.0.0.1:8080` and `[::1]:8080`.
