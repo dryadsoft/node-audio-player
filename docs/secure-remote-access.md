@@ -53,6 +53,12 @@ installing dependencies. Node.js 22 is a temporary bridge for the existing
 32-bit Raspberry Pi OS; plan a supported 64-bit OS migration before Node.js 22
 reaches end of life.
 
+On Raspbian Buster ARMv7, the official Node.js 22 binary requires a newer
+`GLIBCXX` symbol than the system library provides. Do not replace the system
+`libstdc++6`. Use the checksum-pinned, application-local compatibility wrapper
+documented in `raspberry-pi-cloudflare-access-runbook.md` so Node.js 16 remains
+available for rollback.
+
 ```sh
 cd /home/pi/workspace/node-audio-player/server-nestjs
 node --version

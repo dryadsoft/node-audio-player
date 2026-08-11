@@ -173,8 +173,9 @@ getconf LONG_BIT
 ```
 
 이 저장소는 Node.js 22.16 이상, 23 미만이 필요하다. 현재 32-bit Raspberry Pi
-OS에서는 `.nvmrc`에 고정한 공식 ARMv7 빌드를 임시 운영 경로로 사용한다.
-Node.js 22 지원 종료 전에 지원되는 64-bit OS로 전환한다.
+OS에서는 `.nvmrc`에 고정한 공식 ARMv7 빌드와 앱 전용 C++ 호환 라이브러리를
+임시 운영 경로로 사용한다. Node.js 22 지원 종료 전에 지원되는 64-bit OS로
+전환한다.
 
 ```sh
 export NVM_DIR=/home/pi/.nvm
@@ -199,6 +200,23 @@ npm run test:e2e -- --runInBand --no-watchman
 pm2 restart nmp --update-env
 pm2 save
 ```
+
+Raspbian Buster의 시스템 `libstdc++6`는 `GLIBCXX_3.4.25`까지만 제공한다.
+Node.js 22 ARMv7 바이너리가 `GLIBCXX_3.4.26` 오류로 시작하지 않으면 시스템
+라이브러리를 교체하지 않는다. 현재 배포는 Ubuntu Toolchain PPA의 Bionic
+ARMHF `libstdc++6` 패키지를 체크섬 검증한 뒤
+`/home/pi/.local/node22-compat/`에만 추출하고, NVM의 원본 바이너리를
+`node.official`로 보존한 래퍼를 사용한다. PM2의 interpreter는 해당 NVM
+`bin/node` 래퍼여야 한다.
+
+현재 검증된 호환 패키지:
+
+- 버전: `libstdc++6_16-20260315-1ubuntu1~18~ppa3_armhf.deb`
+- SHA-256: `0ba101da3f5e83a4b12be093050e0c20242f00c48d7cce899ddab6043e5dc7b0`
+- 적용 범위: Node.js 22 프로세스만
+
+배포 후 `ldd`로 Node.js 22가 앱 전용 `libstdc++.so.6`을 사용하고 Node.js 16은
+기존 시스템 라이브러리를 사용하는지 확인한다.
 
 빌드가 실패하면 PM2를 재시작하지 않고 백업된 `dist/`를 유지하거나 복원한다.
 
