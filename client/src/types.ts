@@ -29,3 +29,44 @@ export interface LibraryResponse {
   directory: Array<{ name: string }>;
   playlist: Array<{ name: string }>;
 }
+
+export type LessonTerm = "spring" | "summer" | "fall" | "winter";
+
+export interface LessonLocation {
+  id: string;
+  name: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LessonWeek {
+  week: number;
+  className: string;
+  content: string;
+}
+
+export interface LessonPlanSummary {
+  id: string;
+  year: number;
+  term: LessonTerm;
+  locationId: string;
+  locationName: string;
+  locationActive: boolean;
+  completedWeeks: number;
+  status: "draft" | "complete";
+  revision: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LessonPlan extends LessonPlanSummary {
+  weeks: LessonWeek[];
+}
+
+export interface LessonPlanInput {
+  year: number;
+  term: LessonTerm;
+  locationId: string;
+  weeks: LessonWeek[];
+}

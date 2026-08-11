@@ -1,5 +1,10 @@
 import {
   LibraryResponse,
+  LessonLocation,
+  LessonPlan,
+  LessonPlanInput,
+  LessonPlanSummary,
+  LessonTerm,
   PlaylistDownloadStatus,
   SavedPlaylist,
 } from "../types";
@@ -73,4 +78,57 @@ export const api = {
     request<PlaylistDownloadStatus>(`/api/playlist-downloads/${id}`),
   playlistDownloadUrl: (id: string) =>
     `/api/playlist-downloads/${encodeURIComponent(id)}/file`,
+  lessonLocations: () =>
+    request<LessonLocation[]>("/api/lesson-locations?includeInactive=true"),
+  createLessonLocation: (name: string) =>
+    request<LessonLocation>("/api/lesson-locations", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+  updateLessonLocation: ({
+    id,
+    ...changes
+  }: {
+    id: string;
+    name?: string;
+    active?: boolean;
+  }) =>
+    request<LessonLocation>(`/api/lesson-locations/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(changes),
+    }),
+  lessonPlans: ({
+    year,
+    term,
+    locationId,
+  }: {
+    year?: number;
+    term?: LessonTerm;
+    locationId?: string;
+  } = {}) => {
+    const params = new URLSearchParams();
+    if (year) params.set("year", String(year));
+    if (term) params.set("term", term);
+    if (locationId) params.set("locationId", locationId);
+    const query = params.toString();
+    return request<LessonPlanSummary[]>(
+      `/api/lesson-plans${query ? `?${query}` : ""}`
+    );
+  },
+  lessonPlan: (id: string) =>
+    request<LessonPlan>(`/api/lesson-plans/${encodeURIComponent(id)}`),
+  createLessonPlan: (input: LessonPlanInput) =>
+    request<LessonPlan>("/api/lesson-plans", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  updateLessonPlan: ({
+    id,
+    expectedRevision,
+    ...input
+  }: LessonPlanInput & { id: string; expectedRevision: number }) =>
+    request<LessonPlan>(`/api/lesson-plans/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify({ ...input, expectedRevision }),
+    }),
 };

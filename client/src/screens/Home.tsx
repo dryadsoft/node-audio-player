@@ -25,6 +25,7 @@ import { useMutation, useQuery, useQueryClient } from "react-query";
 import { api } from "../api";
 import Player from "../components/Player";
 import Playlist from "../components/Playlist";
+import AppNavigation from "../components/AppNavigation";
 import {
   LibraryResponse,
   PlaylistDownloadStatus,
@@ -369,6 +370,7 @@ function Home() {
       onDragCancel={() => setActiveDragName("")}
     >
       <main className="app-shell">
+        <AppNavigation />
         <header className="player-header">
           <div className="brand-block">
             <span className="brand-mark">OG</span>

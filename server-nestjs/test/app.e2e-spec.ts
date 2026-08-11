@@ -23,6 +23,10 @@ describe('AppController (e2e)', () => {
       temporaryDirectory,
       'playlists.json',
     );
+    process.env.LESSON_PLAN_DB_PATH = resolve(
+      temporaryDirectory,
+      'lesson-plans.sqlite',
+    );
     await fs.mkdir(resolve(musicRoot, '수업 음악'), { recursive: true });
     await Promise.all([
       fs.writeFile(resolve(musicRoot, '수업 음악/첫 곡.wma'), 'wma'),
@@ -53,6 +57,7 @@ describe('AppController (e2e)', () => {
     delete process.env.AUDIO_CACHE_PATH;
     delete process.env.DOWNLOAD_WORK_PATH;
     delete process.env.PLAYLIST_DATA_PATH;
+    delete process.env.LESSON_PLAN_DB_PATH;
     await fs.rm(temporaryDirectory, { recursive: true, force: true });
   });
 
@@ -120,5 +125,68 @@ describe('AppController (e2e)', () => {
     expect(downloaded.headers['content-disposition']).toContain(
       "filename*=UTF-8''",
     );
+  });
+
+  it('/api/lesson-plans creates, filters, and updates a 12-week plan', async () => {
+    const location = await request(app.getHttpServer())
+      .post('/api/lesson-locations')
+      .send({ name: '서초 문화센터' })
+      .expect(201);
+    const initialWeeks = Array.from({ length: 12 }, (_, index) => ({
+      week: index + 1,
+      className: index < 3 ? `${index + 1}주 수업` : '',
+      content: index < 3 ? `${index + 1}주 내용` : '',
+    }));
+    const created = await request(app.getHttpServer())
+      .post('/api/lesson-plans')
+      .send({
+        year: 2026,
+        term: 'spring',
+        locationId: location.body.id,
+        weeks: initialWeeks,
+      })
+      .expect(201);
+    expect(created.body).toMatchObject({
+      completedWeeks: 3,
+      status: 'draft',
+      revision: 1,
+    });
+
+    const listed = await request(app.getHttpServer())
+      .get('/api/lesson-plans')
+      .query({ year: 2026, term: 'spring' })
+      .expect(200);
+    expect(listed.body).toHaveLength(1);
+
+    const completedWeeks = initialWeeks.map((week) => ({
+      ...week,
+      className: week.className || `${week.week}주 수업`,
+      content: week.content || `${week.week}주 내용`,
+    }));
+    await request(app.getHttpServer())
+      .put(`/api/lesson-plans/${created.body.id}`)
+      .send({
+        year: 2026,
+        term: 'spring',
+        locationId: location.body.id,
+        weeks: completedWeeks,
+        expectedRevision: 1,
+      })
+      .expect(200)
+      .expect((response) => {
+        expect(response.body.status).toBe('complete');
+        expect(response.body.revision).toBe(2);
+      });
+
+    await request(app.getHttpServer())
+      .put(`/api/lesson-plans/${created.body.id}`)
+      .send({
+        year: 2026,
+        term: 'spring',
+        locationId: location.body.id,
+        weeks: initialWeeks,
+        expectedRevision: 1,
+      })
+      .expect(409);
   });
 });

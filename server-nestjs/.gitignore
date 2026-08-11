@@ -42,6 +42,11 @@ music/songs/*
 /data/playlists.json
 /data/.playlists-*.tmp
 
+# Runtime lesson plan data
+/data/*.sqlite
+/data/*.sqlite-*
+/data/backups/
+
 # Generated audio cache
 /data/audio-cache/
 

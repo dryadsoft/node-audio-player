@@ -1,6 +1,13 @@
 import "@testing-library/jest-dom";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "react-query";
+import { MemoryRouter } from "react-router-dom";
 import Home from "./Home";
 
 const jsonResponse = (payload: unknown, status = 200) =>
@@ -24,7 +31,10 @@ describe("Home", () => {
         });
       }
       if (url.startsWith("/api/playlist?")) {
-        return jsonResponse({ directory: [], playlist: [{ name: "첫 곡.mp3" }] });
+        return jsonResponse({
+          directory: [],
+          playlist: [{ name: "첫 곡.mp3" }],
+        });
       }
       if (url === "/api/playlists") {
         return jsonResponse([]);
@@ -44,7 +54,9 @@ describe("Home", () => {
     });
     return render(
       <QueryClientProvider client={queryClient}>
-        <Home />
+        <MemoryRouter>
+          <Home />
+        </MemoryRouter>
       </QueryClientProvider>
     );
   };
@@ -60,17 +72,25 @@ describe("Home", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "만들기" }));
 
-    await waitFor(() => expect(screen.getAllByText("수업 목록").length).toBeGreaterThan(0));
-    expect(screen.getByText("‘수업 목록’ 목록을 만들었습니다.")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getAllByText("수업 목록").length).toBeGreaterThan(0)
+    );
+    expect(
+      screen.getByText("‘수업 목록’ 목록을 만들었습니다.")
+    ).toBeInTheDocument();
 
     act(() => {
       jest.advanceTimersByTime(2999);
     });
-    expect(screen.getByText("‘수업 목록’ 목록을 만들었습니다.")).toBeInTheDocument();
+    expect(
+      screen.getByText("‘수업 목록’ 목록을 만들었습니다.")
+    ).toBeInTheDocument();
     act(() => {
       jest.advanceTimersByTime(1);
     });
-    expect(screen.queryByText("‘수업 목록’ 목록을 만들었습니다.")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("‘수업 목록’ 목록을 만들었습니다.")
+    ).not.toBeInTheDocument();
 
     expect(window.fetch).toHaveBeenCalledWith(
       "/api/playlists",
@@ -105,7 +125,9 @@ describe("Home", () => {
       jest.advanceTimersByTime(3000);
     });
     fireEvent.click(screen.getByRole("button", { name: "만들기" }));
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("목록 생성 실패"));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent("목록 생성 실패")
+    );
     act(() => {
       jest.advanceTimersByTime(4999);
     });
@@ -128,22 +150,32 @@ describe("Home", () => {
     await screen.findByText("‘수업 목록’ 목록을 만들었습니다.");
 
     fireEvent.click(screen.getByRole("button", { name: "알림 닫기" }));
-    expect(screen.queryByText("‘수업 목록’ 목록을 만들었습니다.")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("‘수업 목록’ 목록을 만들었습니다.")
+    ).not.toBeInTheDocument();
   });
 
   it("clears the search term and returns to the library", async () => {
     renderHome();
     const searchInput = screen.getByLabelText("노래 제목 검색");
 
-    expect(screen.queryByRole("button", { name: "검색어 지우기" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "검색어 지우기" })
+    ).not.toBeInTheDocument();
     fireEvent.change(searchInput, { target: { value: "여름 노래" } });
     fireEvent.click(screen.getByRole("button", { name: "검색" }));
-    expect(screen.getByRole("heading", { name: "검색 결과" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "검색 결과" })
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "검색어 지우기" }));
     expect(searchInput).toHaveValue("");
-    expect(screen.getByRole("heading", { name: "음악 보관함" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "검색어 지우기" })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "음악 보관함" })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "검색어 지우기" })
+    ).not.toBeInTheDocument();
     expect(searchInput).toHaveFocus();
   });
 
@@ -216,7 +248,9 @@ describe("Home", () => {
     });
 
     expect(anchorClick).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("MP3 ZIP 다운로드를 시작했습니다.")).toBeInTheDocument();
+    expect(
+      screen.getByText("MP3 ZIP 다운로드를 시작했습니다.")
+    ).toBeInTheDocument();
     expect(window.fetch).toHaveBeenCalledWith(
       "/api/playlist-downloads/download-1",
       expect.any(Object)
