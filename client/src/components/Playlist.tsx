@@ -24,15 +24,27 @@ interface PlaylistPanelProps {
 
 interface SortableTrackProps {
   track: PlaylistTrack;
+  position: number;
   onRemove: () => void;
   onPlay: () => void;
 }
 
-const SortableTrack = ({ track, onRemove, onPlay }: SortableTrackProps) => {
+const getDisplayName = (name: string, position: number) => {
+  const title = name.replace(/^\d+\.\s*/, "");
+  return `${String(position).padStart(2, "0")}.${title}`;
+};
+
+const SortableTrack = ({
+  track,
+  position,
+  onRemove,
+  onPlay,
+}: SortableTrackProps) => {
+  const displayName = getDisplayName(track.name, position);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({
       id: `saved:${track.path}`,
-      data: { type: "saved", path: track.path },
+      data: { type: "saved", path: track.path, name: displayName },
     });
 
   return (
@@ -46,7 +58,7 @@ const SortableTrack = ({ track, onRemove, onPlay }: SortableTrackProps) => {
       <button
         type="button"
         className="drag-handle"
-        aria-label={`${track.name} 순서 변경`}
+        aria-label={`${displayName} 순서 변경`}
         {...attributes}
         {...listeners}
       >
@@ -58,7 +70,7 @@ const SortableTrack = ({ track, onRemove, onPlay }: SortableTrackProps) => {
         onClick={onPlay}
         disabled={!track.available}
       >
-        <span className="track-name">{track.name}</span>
+        <span className="track-name">{displayName}</span>
         <span className="track-path">
           {track.available ? track.path : "원본 없음"}
         </span>
@@ -66,7 +78,7 @@ const SortableTrack = ({ track, onRemove, onPlay }: SortableTrackProps) => {
       <button
         type="button"
         className="icon-button danger"
-        aria-label={`${track.name} 삭제`}
+        aria-label={`${displayName} 삭제`}
         onClick={onRemove}
       >
         <FiTrash2 />
@@ -224,10 +236,11 @@ const Playlist = ({
               >
                 {selectedPlaylist.tracks.length > 0 ? (
                   <ol className="track-list">
-                    {selectedPlaylist.tracks.map((track) => (
+                    {selectedPlaylist.tracks.map((track, index) => (
                       <SortableTrack
                         key={track.path}
                         track={track}
+                        position={index + 1}
                         onPlay={() => onPlay(track)}
                         onRemove={() => onRemoveTrack(track.path)}
                       />
