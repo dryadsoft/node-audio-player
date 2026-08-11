@@ -66,3 +66,29 @@ npm run db:backup
 
 The command prints the timestamped backup path after SQLite reports a valid
 copy.
+
+### Historical HWP import
+
+Run extraction on the development Mac. It reads only `.hwp` files from the
+repository-root `강의계획서/` directory and writes ignored runtime artifacts
+under `data/imports/`:
+
+```sh
+npm run lesson-plans:extract:test
+npm run lesson-plans:extract -- --source ../강의계획서
+```
+
+Review `data/imports/lesson-plans-report.csv`, then copy only the generated
+manifest to the Raspberry Pi. Back up the target database before applying it:
+
+```sh
+npm run build
+npm run db:backup
+npm run lesson-plans:import -- \
+  --apply --manifest data/imports/lesson-plans-manifest.json
+```
+
+The importer creates missing locations, preserves incomplete plans as 12 rows
+with blanks, and records source paths and checksums. Reapplying the same
+manifest is safe. A different source that collides with an existing plan aborts
+the transaction without overwriting data.

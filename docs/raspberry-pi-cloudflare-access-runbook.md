@@ -201,6 +201,21 @@ pm2 restart nmp --update-env
 pm2 save
 ```
 
+과거 HWP에서 생성한 manifest를 적용할 때는 HWP 원본을 Pi로 복사하지 않는다.
+검토한 `lesson-plans-manifest.json`만 `server-nestjs/data/imports/`에 전송하고,
+위 백업과 테스트가 성공한 뒤 다음 순서로 적용한다.
+
+```sh
+pm2 stop nmp
+npm run lesson-plans:import -- \
+  --apply --manifest data/imports/lesson-plans-manifest.json
+pm2 restart nmp --update-env
+pm2 save
+```
+
+명령은 동일 원본을 다시 만나면 건너뛴다. 기존 계획서와 다른 원본이 충돌하면
+덮어쓰지 않고 전체 트랜잭션을 취소한다.
+
 Raspbian Buster의 시스템 `libstdc++6`는 `GLIBCXX_3.4.25`까지만 제공한다.
 Node.js 22 ARMv7 바이너리가 `GLIBCXX_3.4.26` 오류로 시작하지 않으면 시스템
 라이브러리를 교체하지 않는다. 현재 배포는 Ubuntu Toolchain PPA의 Bionic
