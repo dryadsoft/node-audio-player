@@ -29,6 +29,8 @@ const plan = (
   locationId: location.id,
   locationName: location.name,
   locationActive: true,
+  programName: "오감별",
+  sectionName: "월요일",
   completedWeeks: 2,
   status: "draft",
   revision: 1,
@@ -129,6 +131,8 @@ describe("LessonPlans", () => {
     await waitFor(() => expect(savedBody).toBeDefined());
     expect(savedBody?.term).toBe("spring");
     expect(savedBody?.locationId).toBe(location.id);
+    expect(savedBody?.programName).toBe("오감별");
+    expect(savedBody?.sectionName).toBe("");
     expect(savedBody?.weeks).toHaveLength(12);
     expect((savedBody?.weeks as LessonWeek[])[0]).toMatchObject({
       week: 1,
@@ -151,6 +155,8 @@ describe("LessonPlans", () => {
       target: { value: "summer" },
     });
     expect(screen.getByLabelText("계획서 학기")).toHaveValue("summer");
+    expect(screen.getByLabelText("계획서 프로그램명")).toHaveValue("오감별");
+    expect(screen.getByLabelText("계획서 수업 구분")).toHaveValue("월요일");
   });
 
   it("registers a reusable lesson location", async () => {

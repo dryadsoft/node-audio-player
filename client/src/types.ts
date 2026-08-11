@@ -53,6 +53,8 @@ export interface LessonPlanSummary {
   locationId: string;
   locationName: string;
   locationActive: boolean;
+  programName: string;
+  sectionName: string;
   completedWeeks: number;
   status: "draft" | "complete";
   revision: number;
@@ -68,5 +70,7 @@ export interface LessonPlanInput {
   year: number;
   term: LessonTerm;
   locationId: string;
+  programName: string;
+  sectionName: string;
   weeks: LessonWeek[];
 }

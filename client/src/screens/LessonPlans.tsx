@@ -33,7 +33,12 @@ const TERMS: Array<{ value: LessonTerm; label: string }> = [
 
 const TERM_LABELS = TERMS.reduce<Record<LessonTerm, string>>(
   (labels, term) => ({ ...labels, [term.value]: term.label }),
-  { spring: "봄학기", summer: "여름학기", fall: "가을학기", winter: "겨울학기" }
+  {
+    spring: "봄학기",
+    summer: "여름학기",
+    fall: "가을학기",
+    winter: "겨울학기",
+  }
 );
 
 const createEmptyWeeks = (): LessonWeek[] =>
@@ -69,6 +74,7 @@ function LessonPlans() {
   const [year, setYear] = useState(currentYear);
   const [term, setTerm] = useState<LessonTerm | "">("");
   const [locationId, setLocationId] = useState("");
+  const [programName, setProgramName] = useState("");
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [editor, setEditor] = useState<EditorDraft>();
   const [locationDialogOpen, setLocationDialogOpen] = useState(false);
@@ -93,6 +99,13 @@ function LessonPlans() {
     () => locations.filter((location) => location.active),
     [locations]
   );
+  const programNames = useMemo(
+    () =>
+      Array.from(new Set(plans.map((plan) => plan.programName))).sort((a, b) =>
+        a.localeCompare(b, "ko")
+      ),
+    [plans]
+  );
   const years = useMemo(
     () =>
       Array.from(
@@ -106,9 +119,10 @@ function LessonPlans() {
         (plan) =>
           plan.year === year &&
           (!term || plan.term === term) &&
-          (!locationId || plan.locationId === locationId)
+          (!locationId || plan.locationId === locationId) &&
+          (!programName || plan.programName === programName)
       ),
-    [locationId, plans, term, year]
+    [locationId, plans, programName, term, year]
   );
 
   useEffect(() => {
@@ -150,6 +164,8 @@ function LessonPlans() {
         year: draft.year,
         term: draft.term,
         locationId: draft.locationId,
+        programName: draft.programName,
+        sectionName: draft.sectionName,
         weeks: draft.weeks,
       };
       return draft.id && draft.revision
@@ -167,6 +183,7 @@ function LessonPlans() {
         setYear(saved.year);
         setTerm(saved.term);
         setLocationId(saved.locationId);
+        setProgramName(saved.programName);
         setSelectedPlanId(saved.id);
         setEditor(undefined);
         showNotice("강의계획서를 저장했습니다.");
@@ -187,6 +204,8 @@ function LessonPlans() {
       year,
       term: term || "spring",
       locationId: activeLocations[0]?.id || "",
+      programName: programName || "오감별",
+      sectionName: "",
       weeks: createEmptyWeeks(),
     });
   };
@@ -200,6 +219,8 @@ function LessonPlans() {
       year: detailQuery.data.year,
       term: detailQuery.data.term,
       locationId: detailQuery.data.locationId,
+      programName: detailQuery.data.programName,
+      sectionName: detailQuery.data.sectionName,
       weeks: detailQuery.data.weeks.map((week) => ({ ...week })),
     });
   };
@@ -211,6 +232,8 @@ function LessonPlans() {
       year: currentYear,
       term: detailQuery.data.term,
       locationId: detailQuery.data.locationId,
+      programName: detailQuery.data.programName,
+      sectionName: detailQuery.data.sectionName,
       weeks: detailQuery.data.weeks.map((week) => ({ ...week })),
     });
   };
@@ -373,6 +396,21 @@ function LessonPlans() {
             ))}
           </select>
         </label>
+        <label>
+          <span>프로그램</span>
+          <select
+            aria-label="프로그램 검색"
+            value={programName}
+            onChange={(event) => setProgramName(event.target.value)}
+          >
+            <option value="">전체 프로그램</option>
+            {programNames.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
         <div className="lesson-toolbar-actions">
           <button
             className="button secondary"
@@ -417,8 +455,10 @@ function LessonPlans() {
                 />
                 <span className="plan-card-main">
                   <b>{TERM_LABELS[plan.term]}</b>
+                  <span>{plan.programName}</span>
                   <span>
                     <FiMapPin /> {plan.locationName}
+                    {plan.sectionName ? ` · ${plan.sectionName}` : ""}
                   </span>
                 </span>
                 <span className={`completion-badge ${plan.status}`}>
@@ -475,8 +515,8 @@ function LessonPlans() {
 
               {editor.kind === "copy" ? (
                 <p className="copy-guidance">
-                  복사할 대상의 연도·학기·장소를 바꾸고 내용을 수정한 뒤
-                  저장하세요.
+                  복사할 대상의 연도·학기·장소·프로그램·수업 구분을 바꾸고
+                  내용을 수정한 뒤 저장하세요.
                 </p>
               ) : null}
 
@@ -531,6 +571,29 @@ function LessonPlans() {
                       </option>
                     ))}
                   </select>
+                </label>
+                <label>
+                  <span>프로그램명</span>
+                  <input
+                    aria-label="계획서 프로그램명"
+                    value={editor.programName}
+                    onChange={(event) =>
+                      setEditor({ ...editor, programName: event.target.value })
+                    }
+                    placeholder="예: 오감별"
+                    required
+                  />
+                </label>
+                <label>
+                  <span>수업 구분</span>
+                  <input
+                    aria-label="계획서 수업 구분"
+                    value={editor.sectionName}
+                    onChange={(event) =>
+                      setEditor({ ...editor, sectionName: event.target.value })
+                    }
+                    placeholder="예: 월요일, 8주"
+                  />
                 </label>
                 <button
                   className="button secondary copy-weeks-button"
@@ -612,6 +675,11 @@ function LessonPlans() {
                     {selectedDetail.locationName}
                   </h2>
                   <p>
+                    {selectedDetail.programName}
+                    {selectedDetail.sectionName
+                      ? ` · ${selectedDetail.sectionName}`
+                      : ""}
+                    {" · "}
                     마지막 수정{" "}
                     {new Date(selectedDetail.updatedAt).toLocaleString("ko-KR")}
                   </p>
@@ -742,7 +810,9 @@ function LessonPlans() {
                 <option value="">원본 선택</option>
                 {plans.map((plan) => (
                   <option key={plan.id} value={plan.id}>
-                    {plan.year}년 {TERM_LABELS[plan.term]} · {plan.locationName}
+                    {plan.year}년 {TERM_LABELS[plan.term]} · {plan.programName}{" "}
+                    · {plan.locationName}
+                    {plan.sectionName ? ` · ${plan.sectionName}` : ""}
                   </option>
                 ))}
               </select>

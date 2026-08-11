@@ -101,15 +101,18 @@ export const api = {
     year,
     term,
     locationId,
+    programName,
   }: {
     year?: number;
     term?: LessonTerm;
     locationId?: string;
+    programName?: string;
   } = {}) => {
     const params = new URLSearchParams();
     if (year) params.set("year", String(year));
     if (term) params.set("term", term);
     if (locationId) params.set("locationId", locationId);
+    if (programName) params.set("programName", programName);
     const query = params.toString();
     return request<LessonPlanSummary[]>(
       `/api/lesson-plans${query ? `?${query}` : ""}`

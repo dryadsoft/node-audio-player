@@ -1114,7 +1114,9 @@ textarea {
 
 .lesson-toolbar {
   display: grid;
-  grid-template-columns: 150px 170px minmax(190px, 1fr) auto;
+  grid-template-columns:
+    130px 150px minmax(170px, 1fr) minmax(150px, 0.8fr)
+    auto;
   gap: 10px;
   align-items: end;
   margin-bottom: 12px;
@@ -1345,7 +1347,9 @@ textarea {
 
 .editor-meta {
   display: grid;
-  grid-template-columns: 130px 160px minmax(180px, 1fr) auto;
+  grid-template-columns:
+    110px 140px minmax(160px, 1fr) minmax(150px, 0.8fr)
+    minmax(150px, 0.8fr) auto;
   gap: 9px;
   align-items: end;
   margin: 16px 0 13px;
