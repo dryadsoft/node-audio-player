@@ -22,3 +22,19 @@ npm run start:dev
 
 `AUDIO_CACHE_PATH` must be writable by the account running NestJS. Cache files
 are generated data and can be deleted when the application is stopped.
+
+## Playlist MP3 ZIP downloads
+
+Playlist downloads use FFmpeg to copy existing MP3 audio or convert other
+formats, then write ordered MP3 metadata and create a ZIP in a generated work
+directory. Source files under `music/songs/` remain unchanged.
+
+```sh
+command -v ffmpeg
+export DOWNLOAD_WORK_PATH="$PWD/data/downloads"
+npm run start:dev
+```
+
+`DOWNLOAD_WORK_PATH` must be writable by the NestJS account. Jobs run one at a
+time, ready files expire after one hour, and generated work is removed after a
+download or server restart.
