@@ -1,6 +1,7 @@
 ## Server with Nest.js
 
-Node.js 24 LTS is required. The server uses the built-in `node:sqlite` module.
+Node.js 22.16 or newer in the Node.js 22 LTS line is required. The server uses
+the built-in `node:sqlite` module and its online backup API.
 
 ## pm2
 

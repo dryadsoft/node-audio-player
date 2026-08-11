@@ -2,8 +2,9 @@
 
 ## Runtime
 
-Active React and NestJS applications require Node.js 24 LTS. Run `nvm use` at
-the repository root to use the version in `.nvmrc`.
+Active React and NestJS applications require Node.js 22.16 or newer in the
+Node.js 22 LTS line. Run `nvm use` at the repository root to select the pinned
+version in `.nvmrc`.
 
 ## server 로컬 실행
 

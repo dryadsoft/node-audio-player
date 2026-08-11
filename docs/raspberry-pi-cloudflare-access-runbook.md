@@ -172,14 +172,15 @@ uname -m
 getconf LONG_BIT
 ```
 
-이 저장소는 Node.js 24 LTS가 필요하다. Pi OS와 아키텍처에서 Node 24를 실행할
-수 있는지 먼저 확인한다. 실행할 수 없으면 현재 서비스를 변경하지 않는다.
-NVM을 사용한다면 Node 24를 선택하고 실제 버전을 다시 확인한다.
+이 저장소는 Node.js 22.16 이상, 23 미만이 필요하다. 현재 32-bit Raspberry Pi
+OS에서는 `.nvmrc`에 고정한 공식 ARMv7 빌드를 임시 운영 경로로 사용한다.
+Node.js 22 지원 종료 전에 지원되는 64-bit OS로 전환한다.
 
 ```sh
 export NVM_DIR=/home/pi/.nvm
 . "$NVM_DIR/nvm.sh"
-nvm use 24
+nvm install
+nvm use
 node --version
 cd /home/pi/workspace/node-audio-player/server-nestjs
 mkdir -p data/audio-cache

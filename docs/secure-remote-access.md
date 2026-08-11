@@ -47,9 +47,11 @@ deployment backup.
 
 Build both active applications. Restart PM2 only after the NestJS build passes.
 
-The active applications require Node.js 24 LTS. Confirm `node --version` reports
-`v24.x` before installing dependencies. If the Pi OS or architecture cannot run
-Node 24, stop before changing the current service.
+The active applications require Node.js 22.16 or newer in the Node.js 22 LTS
+line. Confirm `node --version` reports the version pinned in `.nvmrc` before
+installing dependencies. Node.js 22 is a temporary bridge for the existing
+32-bit Raspberry Pi OS; plan a supported 64-bit OS migration before Node.js 22
+reaches end of life.
 
 ```sh
 cd /home/pi/workspace/node-audio-player/server-nestjs
