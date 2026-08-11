@@ -8,5 +8,6 @@ import { FfmpegService } from './ffmpeg.service';
   imports: [FileModule],
   controllers: [AudioController],
   providers: [AudioService, FfmpegService],
+  exports: [FfmpegService],
 })
 export class AudioModule {}

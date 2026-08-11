@@ -35,6 +35,12 @@ export class PlaylistService {
     );
   }
 
+  async get(id: string) {
+    await this.writeQueue;
+    const store = await this.readStore();
+    return this.toResponse(this.findPlaylist(store, id));
+  }
+
   create(title: unknown) {
     return this.enqueue(async () => {
       const store = await this.readStore();

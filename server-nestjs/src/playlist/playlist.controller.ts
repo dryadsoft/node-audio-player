@@ -4,16 +4,21 @@ import {
   Delete,
   Get,
   HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
   Put,
 } from '@nestjs/common';
 import { PlaylistService } from './playlist.service';
+import { PlaylistDownloadService } from './playlist-download.service';
 
 @Controller('api/playlists')
 export class PlaylistController {
-  constructor(private readonly playlistService: PlaylistService) {}
+  constructor(
+    private readonly playlistService: PlaylistService,
+    private readonly playlistDownloadService: PlaylistDownloadService,
+  ) {}
 
   @Get()
   list() {
@@ -61,5 +66,11 @@ export class PlaylistController {
     @Body() body: { paths?: unknown },
   ) {
     return this.playlistService.reorderTracks(playlistId, body?.paths);
+  }
+
+  @Post(':playlistId/downloads')
+  @HttpCode(HttpStatus.ACCEPTED)
+  startDownload(@Param('playlistId') playlistId: string) {
+    return this.playlistDownloadService.start(playlistId);
   }
 }

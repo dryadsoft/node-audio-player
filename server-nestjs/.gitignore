@@ -44,3 +44,6 @@ music/songs/*
 
 # Generated audio cache
 /data/audio-cache/
+
+# Generated playlist downloads
+/data/downloads/
