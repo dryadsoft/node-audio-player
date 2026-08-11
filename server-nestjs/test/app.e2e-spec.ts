@@ -143,18 +143,22 @@ describe('AppController (e2e)', () => {
         year: 2026,
         term: 'spring',
         locationId: location.body.id,
+        programName: '오감별',
+        sectionName: '월요일',
         weeks: initialWeeks,
       })
       .expect(201);
     expect(created.body).toMatchObject({
       completedWeeks: 3,
       status: 'draft',
+      programName: '오감별',
+      sectionName: '월요일',
       revision: 1,
     });
 
     const listed = await request(app.getHttpServer())
       .get('/api/lesson-plans')
-      .query({ year: 2026, term: 'spring' })
+      .query({ year: 2026, term: 'spring', programName: '오감별' })
       .expect(200);
     expect(listed.body).toHaveLength(1);
 
@@ -169,6 +173,8 @@ describe('AppController (e2e)', () => {
         year: 2026,
         term: 'spring',
         locationId: location.body.id,
+        programName: '오감별',
+        sectionName: '월요일',
         weeks: completedWeeks,
         expectedRevision: 1,
       })
@@ -184,6 +190,8 @@ describe('AppController (e2e)', () => {
         year: 2026,
         term: 'spring',
         locationId: location.body.id,
+        programName: '오감별',
+        sectionName: '월요일',
         weeks: initialWeeks,
         expectedRevision: 1,
       })

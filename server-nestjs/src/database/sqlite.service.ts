@@ -8,7 +8,7 @@ import { mkdirSync } from 'fs';
 import { dirname, resolve } from 'path';
 import { loadSqlite, SqliteDatabase } from './sqlite.types';
 
-const MIGRATION_VERSION = 1;
+const MIGRATION_VERSION = 2;
 
 @Injectable()
 export class SqliteService implements OnModuleInit, OnModuleDestroy {
@@ -81,13 +81,15 @@ export class SqliteService implements OnModuleInit, OnModuleDestroy {
         '현재 서버보다 새로운 강의계획서 데이터베이스입니다.',
       );
     }
-    const applied = this.database
-      .prepare('SELECT version FROM schema_migrations WHERE version = ?')
-      .get(MIGRATION_VERSION);
-    if (applied) return;
-
-    this.transaction((database) => {
-      database.exec(`
+    const currentVersion = Number(latest?.version || 0);
+    for (
+      let version = currentVersion + 1;
+      version <= MIGRATION_VERSION;
+      version += 1
+    ) {
+      this.transaction((database) => {
+        if (version === 1) {
+          database.exec(`
         CREATE TABLE lesson_locations (
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL,
@@ -125,11 +127,72 @@ export class SqliteService implements OnModuleInit, OnModuleDestroy {
         CREATE INDEX lesson_plans_filter_idx
           ON lesson_plans(year, term, location_id);
       `);
-      database
-        .prepare(
-          'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)',
-        )
-        .run(MIGRATION_VERSION, new Date().toISOString());
-    });
+        } else if (version === 2) {
+          database.exec(`
+        CREATE TABLE lesson_plans_v2 (
+          id TEXT PRIMARY KEY,
+          year INTEGER NOT NULL CHECK (year BETWEEN 2000 AND 9999),
+          term TEXT NOT NULL CHECK (
+            term IN ('spring', 'summer', 'fall', 'winter')
+          ),
+          location_id TEXT NOT NULL,
+          program_name TEXT NOT NULL,
+          section_name TEXT NOT NULL DEFAULT '',
+          revision INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (location_id) REFERENCES lesson_locations(id)
+            ON UPDATE CASCADE ON DELETE RESTRICT,
+          UNIQUE (year, term, location_id, program_name, section_name)
+        );
+
+        INSERT INTO lesson_plans_v2
+          (id, year, term, location_id, program_name, section_name,
+           revision, created_at, updated_at)
+        SELECT id, year, term, location_id, '오감별', '',
+               revision, created_at, updated_at
+        FROM lesson_plans;
+
+        CREATE TABLE lesson_weeks_v2 (
+          plan_id TEXT NOT NULL,
+          week INTEGER NOT NULL CHECK (week BETWEEN 1 AND 12),
+          class_name TEXT NOT NULL DEFAULT '',
+          content TEXT NOT NULL DEFAULT '',
+          PRIMARY KEY (plan_id, week),
+          FOREIGN KEY (plan_id) REFERENCES lesson_plans_v2(id)
+            ON UPDATE CASCADE ON DELETE CASCADE
+        );
+
+        INSERT INTO lesson_weeks_v2 (plan_id, week, class_name, content)
+        SELECT plan_id, week, class_name, content FROM lesson_weeks;
+
+        DROP TABLE lesson_weeks;
+        DROP TABLE lesson_plans;
+        ALTER TABLE lesson_plans_v2 RENAME TO lesson_plans;
+        ALTER TABLE lesson_weeks_v2 RENAME TO lesson_weeks;
+
+        CREATE INDEX lesson_plans_filter_idx
+          ON lesson_plans(
+            year, term, location_id, program_name, section_name
+          );
+
+        CREATE TABLE lesson_plan_import_sources (
+          plan_id TEXT PRIMARY KEY,
+          source_path TEXT NOT NULL,
+          source_sha256 TEXT NOT NULL,
+          imported_at TEXT NOT NULL,
+          FOREIGN KEY (plan_id) REFERENCES lesson_plans(id)
+            ON UPDATE CASCADE ON DELETE CASCADE,
+          UNIQUE (source_path, source_sha256)
+        );
+      `);
+        }
+        database
+          .prepare(
+            'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)',
+          )
+          .run(version, new Date().toISOString());
+      });
+    }
   }
 }

@@ -41,6 +41,8 @@ describe('LessonPlanService', () => {
       year: 2026,
       term: 'spring',
       locationId: location.id,
+      programName: '오감별',
+      sectionName: '',
       weeks: weeks(4),
     });
 
@@ -56,20 +58,45 @@ describe('LessonPlanService', () => {
     expect(sqlite.integrityCheck()).toBe(true);
   });
 
-  it('enforces one plan per year, term, and location', () => {
+  it('separates plans by program and section within one location', () => {
     const location = locations.create('강남 교육관');
     plans.create({
       year: 2026,
       term: 'summer',
       locationId: location.id,
+      programName: '오감별',
+      sectionName: '월요일',
       weeks: weeks(),
     });
+
+    const otherProgram = plans.create({
+      year: 2026,
+      term: 'summer',
+      locationId: location.id,
+      programName: '베포츠',
+      sectionName: '월요일',
+      weeks: weeks(),
+    });
+    const otherSection = plans.create({
+      year: 2026,
+      term: 'summer',
+      locationId: location.id,
+      programName: '오감별',
+      sectionName: '일요일',
+      weeks: weeks(),
+    });
+
+    expect(otherProgram.programName).toBe('베포츠');
+    expect(otherSection.sectionName).toBe('일요일');
+    expect(plans.list({ programName: '오감별' })).toHaveLength(2);
 
     expect(() =>
       plans.create({
         year: 2026,
         term: 'summer',
         locationId: location.id,
+        programName: '오감별',
+        sectionName: '월요일',
         weeks: weeks(),
       }),
     ).toThrow(ConflictException);
@@ -81,12 +108,16 @@ describe('LessonPlanService', () => {
       year: 2026,
       term: 'fall',
       locationId: location.id,
+      programName: '오감별',
+      sectionName: '',
       weeks: weeks(2),
     });
     const updated = plans.update(created.id, {
       year: 2026,
       term: 'fall',
       locationId: location.id,
+      programName: '뮤직별',
+      sectionName: '수요일',
       weeks: weeks(12),
       expectedRevision: created.revision,
     });
@@ -94,6 +125,8 @@ describe('LessonPlanService', () => {
     expect(updated).toMatchObject({
       completedWeeks: 12,
       status: 'complete',
+      programName: '뮤직별',
+      sectionName: '수요일',
       revision: 2,
     });
     expect(() =>
@@ -101,6 +134,8 @@ describe('LessonPlanService', () => {
         year: 2026,
         term: 'fall',
         locationId: location.id,
+        programName: '뮤직별',
+        sectionName: '수요일',
         weeks: weeks(1),
         expectedRevision: 1,
       }),
@@ -114,6 +149,8 @@ describe('LessonPlanService', () => {
       year: 2025,
       term: 'winter',
       locationId: location.id,
+      programName: '오감별',
+      sectionName: '',
       weeks: weeks(),
     });
     locations.update(location.id, { active: false });
@@ -124,6 +161,8 @@ describe('LessonPlanService', () => {
         year: 2026,
         term: 'winter',
         locationId: location.id,
+        programName: '오감별',
+        sectionName: '',
         weeks: weeks(),
       }),
     ).toThrow(BadRequestException);
@@ -139,6 +178,8 @@ describe('LessonPlanService', () => {
         year: 2026,
         term: 'spring',
         locationId: location.id,
+        programName: '오감별',
+        sectionName: '',
         weeks: invalidWeeks,
       }),
     ).toThrow(BadRequestException);

@@ -22,7 +22,10 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "db:backup": "node dist/database/backup.js"
+    "db:backup": "node dist/database/backup.js",
+    "lesson-plans:extract": "node scripts/extract-lesson-plans.mjs",
+    "lesson-plans:extract:test": "node --test scripts/extract-lesson-plans.test.mjs",
+    "lesson-plans:import": "node dist/database/import-lesson-plans.js"
   },
   "dependencies": {
     "@nestjs/common": "^8.0.0",
@@ -38,6 +41,7 @@
     "@nestjs/cli": "^8.0.0",
     "@nestjs/schematics": "^8.0.0",
     "@nestjs/testing": "^8.0.0",
+    "@ssabrojs/hwpxjs": "^0.4.0",
     "@types/express": "^4.17.13",
     "@types/jest": "27.4.1",
     "@types/node": "^16.0.0",

@@ -22,6 +22,8 @@ interface PlanRow {
   location_id: string;
   location_name: string;
   location_active: number;
+  program_name: string;
+  section_name: string;
   completed_weeks: number;
   revision: number;
   created_at: string;
@@ -43,6 +45,8 @@ interface PlanInput {
   year?: unknown;
   term?: unknown;
   locationId?: unknown;
+  programName?: unknown;
+  sectionName?: unknown;
   weeks?: unknown;
 }
 
@@ -54,6 +58,7 @@ export class LessonPlanService {
     year?: unknown;
     term?: unknown;
     locationId?: unknown;
+    programName?: unknown;
   }): LessonPlanSummary[] {
     const clauses: string[] = [];
     const params: unknown[] = [];
@@ -72,6 +77,10 @@ export class LessonPlanService {
       clauses.push('p.location_id = ?');
       params.push(filters.locationId);
     }
+    if (filters.programName !== undefined && filters.programName !== '') {
+      clauses.push('p.program_name = ?');
+      params.push(this.validateProgramName(filters.programName));
+    }
 
     const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
     const rows = this.sqlite.database
@@ -84,7 +93,9 @@ export class LessonPlanService {
              WHEN 'spring' THEN 1 WHEN 'summer' THEN 2
              WHEN 'fall' THEN 3 ELSE 4
            END ASC,
-           l.name COLLATE NOCASE ASC`,
+           l.name COLLATE NOCASE ASC,
+           p.program_name COLLATE NOCASE ASC,
+           p.section_name COLLATE NOCASE ASC`,
       )
       .all(...params) as PlanRow[];
     return rows.map((row) => this.toSummary(row));
@@ -112,19 +123,29 @@ export class LessonPlanService {
     const year = this.validateYear(input.year);
     const term = this.validateTerm(input.term);
     const locationId = this.validateLocationId(input.locationId);
+    const programName = this.validateProgramName(input.programName);
+    const sectionName = this.validateSectionName(input.sectionName);
     const weeks = this.validateWeeks(input.weeks);
     const id = randomUUID();
     this.sqlite.transaction((database) => {
       this.ensureLocation(database, locationId, true);
-      this.ensureUniqueCombination(database, year, term, locationId);
+      this.ensureUniqueCombination(
+        database,
+        year,
+        term,
+        locationId,
+        programName,
+        sectionName,
+      );
       const now = new Date().toISOString();
       database
         .prepare(
           `INSERT INTO lesson_plans
-           (id, year, term, location_id, revision, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 1, ?, ?)`,
+           (id, year, term, location_id, program_name, section_name,
+            revision, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
         )
-        .run(id, year, term, locationId, now, now);
+        .run(id, year, term, locationId, programName, sectionName, now, now);
       this.insertWeeks(database, id, weeks);
     });
     return this.get(id);
@@ -137,6 +158,8 @@ export class LessonPlanService {
     const year = this.validateYear(input.year);
     const term = this.validateTerm(input.term);
     const locationId = this.validateLocationId(input.locationId);
+    const programName = this.validateProgramName(input.programName);
+    const sectionName = this.validateSectionName(input.sectionName);
     const weeks = this.validateWeeks(input.weeks);
     const expectedRevision = this.validateRevision(input.expectedRevision);
 
@@ -152,11 +175,20 @@ export class LessonPlanService {
         locationId,
         locationId !== current.location_id,
       );
-      this.ensureUniqueCombination(database, year, term, locationId, id);
+      this.ensureUniqueCombination(
+        database,
+        year,
+        term,
+        locationId,
+        programName,
+        sectionName,
+        id,
+      );
       const updated = database
         .prepare(
           `UPDATE lesson_plans
            SET year = ?, term = ?, location_id = ?,
+               program_name = ?, section_name = ?,
                revision = revision + 1, updated_at = ?
            WHERE id = ? AND revision = ?`,
         )
@@ -164,6 +196,8 @@ export class LessonPlanService {
           year,
           term,
           locationId,
+          programName,
+          sectionName,
           new Date().toISOString(),
           id,
           expectedRevision,
@@ -181,6 +215,7 @@ export class LessonPlanService {
 
   private summarySelect() {
     return `SELECT p.id, p.year, p.term, p.location_id,
+      p.program_name, p.section_name,
       l.name AS location_name, l.active AS location_active,
       p.revision, p.created_at, p.updated_at,
       COALESCE(SUM(CASE
@@ -222,18 +257,29 @@ export class LessonPlanService {
     year: number,
     term: LessonTerm,
     locationId: string,
+    programName: string,
+    sectionName: string,
     exceptId?: string,
   ) {
     const duplicate = database
       .prepare(
         `SELECT id FROM lesson_plans
          WHERE year = ? AND term = ? AND location_id = ?
+           AND program_name = ? AND section_name = ?
            AND (? IS NULL OR id <> ?)`,
       )
-      .get(year, term, locationId, exceptId || null, exceptId || null);
+      .get(
+        year,
+        term,
+        locationId,
+        programName,
+        sectionName,
+        exceptId || null,
+        exceptId || null,
+      );
     if (duplicate) {
       throw new ConflictException(
-        '해당 연도·학기·장소의 강의계획서가 이미 있습니다.',
+        '해당 연도·학기·장소·프로그램·수업 구분의 강의계획서가 이미 있습니다.',
       );
     }
   }
@@ -275,6 +321,29 @@ export class LessonPlanService {
       throw new BadRequestException('장소를 선택하세요.');
     }
     return value;
+  }
+
+  private validateProgramName(value: unknown) {
+    if (typeof value !== 'string') {
+      throw new BadRequestException('프로그램명을 입력하세요.');
+    }
+    const programName = this.normalizeText(value);
+    if (!programName) {
+      throw new BadRequestException('프로그램명을 입력하세요.');
+    }
+    return programName;
+  }
+
+  private validateSectionName(value: unknown) {
+    if (value === undefined || value === null) return '';
+    if (typeof value !== 'string') {
+      throw new BadRequestException('수업 구분이 올바르지 않습니다.');
+    }
+    return this.normalizeText(value);
+  }
+
+  private normalizeText(value: string) {
+    return value.normalize('NFC').trim().replace(/\s+/g, ' ');
   }
 
   private validateRevision(value: unknown) {
@@ -326,6 +395,8 @@ export class LessonPlanService {
       locationId: row.location_id,
       locationName: row.location_name,
       locationActive: Boolean(row.location_active),
+      programName: row.program_name,
+      sectionName: row.section_name,
       completedWeeks,
       status: completedWeeks === 12 ? 'complete' : 'draft',
       revision: row.revision,

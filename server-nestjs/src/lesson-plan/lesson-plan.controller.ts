@@ -10,8 +10,9 @@ export class LessonPlanController {
     @Query('year') year?: string,
     @Query('term') term?: string,
     @Query('locationId') locationId?: string,
+    @Query('programName') programName?: string,
   ) {
-    return this.plans.list({ year, term, locationId });
+    return this.plans.list({ year, term, locationId, programName });
   }
 
   @Get(':planId')
