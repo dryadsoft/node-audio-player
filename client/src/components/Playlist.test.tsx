@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom";
 import { DndContext } from "@dnd-kit/core";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { ComponentProps } from "react";
 import Playlist from "./Playlist";
 import { SavedPlaylist } from "../types";
 
@@ -17,7 +18,7 @@ const createPlaylist = (names: string[]): SavedPlaylist => ({
 });
 
 const renderPlaylist = (selectedPlaylist: SavedPlaylist) => {
-  const props = {
+  const props: ComponentProps<typeof Playlist> = {
     playlists: [selectedPlaylist],
     selectedPlaylist,
     busy: false,
@@ -27,6 +28,9 @@ const renderPlaylist = (selectedPlaylist: SavedPlaylist) => {
     onDelete: jest.fn(),
     onRemoveTrack: jest.fn(),
     onPlay: jest.fn(),
+    downloadBusy: false,
+    downloadStatus: undefined,
+    onDownload: jest.fn(),
   };
 
   const view = render(
@@ -37,11 +41,16 @@ const renderPlaylist = (selectedPlaylist: SavedPlaylist) => {
 
   return {
     ...view,
-    rerenderPlaylist: (playlist: SavedPlaylist) =>
+    props,
+    rerenderPlaylist: (
+      playlist: SavedPlaylist,
+      overrides: Partial<typeof props> = {}
+    ) =>
       view.rerender(
         <DndContext>
           <Playlist
             {...props}
+            {...overrides}
             playlists={[playlist]}
             selectedPlaylist={playlist}
           />
@@ -64,5 +73,35 @@ describe("Playlist", () => {
 
     expect(screen.getByText("01.하이헬로.wma")).toBeInTheDocument();
     expect(screen.getByText("02.통통통.mp3")).toBeInTheDocument();
+  });
+
+  it("starts a download and shows ordered MP3 preparation progress", () => {
+    const playlist = createPlaylist([
+      "01.하이헬로.wma",
+      "02.업다운.mp3",
+      "03.통통통.wav",
+    ]);
+    const { props, rerenderPlaylist } = renderPlaylist(playlist);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "수업 음악 MP3 ZIP 다운로드" })
+    );
+    expect(props.onDownload).toHaveBeenCalledTimes(1);
+
+    rerenderPlaylist(playlist, {
+      downloadBusy: true,
+      downloadStatus: {
+        id: "download-1",
+        playlistId: playlist.id,
+        status: "processing",
+        completed: 1,
+        total: 3,
+      },
+    });
+
+    expect(screen.getByText("준비 중 1/3")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "수업 음악 MP3 ZIP 다운로드" })
+    ).toBeDisabled();
   });
 });

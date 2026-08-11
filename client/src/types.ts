@@ -15,6 +15,16 @@ export interface SavedPlaylist {
   updatedAt: string;
 }
 
+export interface PlaylistDownloadStatus {
+  id: string;
+  playlistId: string;
+  status: "queued" | "processing" | "ready" | "failed";
+  completed: number;
+  total: number;
+  fileName?: string;
+  error?: string;
+}
+
 export interface LibraryResponse {
   directory: Array<{ name: string }>;
   playlist: Array<{ name: string }>;

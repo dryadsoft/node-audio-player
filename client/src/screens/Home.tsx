@@ -25,7 +25,13 @@ import { useMutation, useQuery, useQueryClient } from "react-query";
 import { api } from "../api";
 import Player from "../components/Player";
 import Playlist from "../components/Playlist";
-import { LibraryResponse, PlaylistTrack, SavedPlaylist, TrackReference } from "../types";
+import {
+  LibraryResponse,
+  PlaylistDownloadStatus,
+  PlaylistTrack,
+  SavedPlaylist,
+  TrackReference,
+} from "../types";
 
 const getName = (path: string) => path.substring(path.lastIndexOf("/") + 1);
 
@@ -99,6 +105,8 @@ function Home() {
     open: false,
   });
   const [newTitle, setNewTitle] = useState("");
+  const [downloadStatus, setDownloadStatus] =
+    useState<PlaylistDownloadStatus>();
 
   const directory = path.join("/");
   const libraryQuery = useQuery<LibraryResponse>(
@@ -226,6 +234,40 @@ function Home() {
     },
     onSuccess: replacePlaylist,
   });
+  const downloadMutation = useMutation(
+    async (playlistId: string) => {
+      let current = await api.startPlaylistDownload(playlistId);
+      setDownloadStatus(current);
+      while (current.status === "queued" || current.status === "processing") {
+        await new Promise((resolvePromise) =>
+          window.setTimeout(resolvePromise, 1000)
+        );
+        current = await api.playlistDownloadStatus(current.id);
+        setDownloadStatus(current);
+      }
+      if (current.status === "failed") {
+        throw new Error(current.error || "다운로드 파일을 준비하지 못했습니다.");
+      }
+      return current;
+    },
+    {
+      onSuccess: (download) => {
+        const link = document.createElement("a");
+        link.href = api.playlistDownloadUrl(download.id);
+        link.download = download.fileName || "playlist.zip";
+        link.hidden = true;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setDownloadStatus(undefined);
+        showNotice("MP3 ZIP 다운로드를 시작했습니다.");
+      },
+      onError: (error) => {
+        setDownloadStatus(undefined);
+        showError(error);
+      },
+    }
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -501,6 +543,15 @@ function Home() {
                 removeMutation.mutate({ id: selectedPlaylist.id, path: trackPath })
               }
               onPlay={(track) => setPlayingTrack(track)}
+              downloadBusy={downloadMutation.isLoading}
+              downloadStatus={
+                downloadStatus?.playlistId === selectedPlaylist?.id
+                  ? downloadStatus
+                  : undefined
+              }
+              onDownload={() =>
+                selectedPlaylist && downloadMutation.mutate(selectedPlaylist.id)
+              }
             />
           </div>
         </div>

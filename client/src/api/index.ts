@@ -1,4 +1,8 @@
-import { LibraryResponse, SavedPlaylist } from "../types";
+import {
+  LibraryResponse,
+  PlaylistDownloadStatus,
+  SavedPlaylist,
+} from "../types";
 
 const request = async <T>(url: string, options?: RequestInit): Promise<T> => {
   const response = await fetch(url, {
@@ -61,4 +65,12 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ paths }),
     }),
+  startPlaylistDownload: (id: string) =>
+    request<PlaylistDownloadStatus>(`/api/playlists/${id}/downloads`, {
+      method: "POST",
+    }),
+  playlistDownloadStatus: (id: string) =>
+    request<PlaylistDownloadStatus>(`/api/playlist-downloads/${id}`),
+  playlistDownloadUrl: (id: string) =>
+    `/api/playlist-downloads/${encodeURIComponent(id)}/file`,
 };

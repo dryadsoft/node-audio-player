@@ -146,4 +146,80 @@ describe("Home", () => {
     expect(screen.queryByRole("button", { name: "검색어 지우기" })).not.toBeInTheDocument();
     expect(searchInput).toHaveFocus();
   });
+
+  it("polls MP3 ZIP preparation and starts the ready download", async () => {
+    const playlist = {
+      id: "playlist-download",
+      title: "수업 음악",
+      tracks: [
+        {
+          path: "수업 음악/01.하이헬로.wma",
+          name: "01.하이헬로.wma",
+          available: true,
+        },
+      ],
+      createdAt: "2026-08-11T00:00:00.000Z",
+      updatedAt: "2026-08-11T00:00:00.000Z",
+    };
+    (window.fetch as jest.Mock).mockImplementation(
+      (input: RequestInfo, options?: RequestInit) => {
+        const url = String(input);
+        if (url.startsWith("/api/playlist?")) {
+          return jsonResponse({ directory: [], playlist: [] });
+        }
+        if (url === "/api/playlists") {
+          return jsonResponse([playlist]);
+        }
+        if (
+          url === "/api/playlists/playlist-download/downloads" &&
+          options?.method === "POST"
+        ) {
+          return jsonResponse({
+            id: "download-1",
+            playlistId: playlist.id,
+            status: "queued",
+            completed: 0,
+            total: 1,
+          });
+        }
+        if (url === "/api/playlist-downloads/download-1") {
+          return jsonResponse({
+            id: "download-1",
+            playlistId: playlist.id,
+            status: "ready",
+            completed: 1,
+            total: 1,
+            fileName: "수업 음악.zip",
+          });
+        }
+        return jsonResponse([]);
+      }
+    );
+    const anchorClick = jest
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => undefined);
+    renderHome();
+
+    const downloadButton = await screen.findByRole("button", {
+      name: "수업 음악 MP3 ZIP 다운로드",
+    });
+    jest.useFakeTimers();
+    fireEvent.click(downloadButton);
+    await act(async () => {
+      for (let index = 0; index < 5; index += 1) await Promise.resolve();
+    });
+    expect(screen.getByText("준비 중 0/1")).toBeInTheDocument();
+
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+      for (let index = 0; index < 8; index += 1) await Promise.resolve();
+    });
+
+    expect(anchorClick).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("MP3 ZIP 다운로드를 시작했습니다.")).toBeInTheDocument();
+    expect(window.fetch).toHaveBeenCalledWith(
+      "/api/playlist-downloads/download-1",
+      expect.any(Object)
+    );
+  });
 });

@@ -6,9 +6,13 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { FiEdit2, FiList, FiPlus, FiTrash2 } from "react-icons/fi";
+import { FiDownload, FiEdit2, FiList, FiPlus, FiTrash2 } from "react-icons/fi";
 import { MdDragIndicator } from "react-icons/md";
-import { PlaylistTrack, SavedPlaylist } from "../types";
+import {
+  PlaylistDownloadStatus,
+  PlaylistTrack,
+  SavedPlaylist,
+} from "../types";
 
 interface PlaylistPanelProps {
   playlists: SavedPlaylist[];
@@ -20,6 +24,9 @@ interface PlaylistPanelProps {
   onDelete: () => void;
   onRemoveTrack: (path: string) => void;
   onPlay: (track: PlaylistTrack) => void;
+  downloadBusy: boolean;
+  downloadStatus?: PlaylistDownloadStatus;
+  onDownload: () => void;
 }
 
 interface SortableTrackProps {
@@ -97,6 +104,9 @@ const Playlist = ({
   onDelete,
   onRemoveTrack,
   onPlay,
+  downloadBusy,
+  downloadStatus,
+  onDownload,
 }: PlaylistPanelProps) => {
   const [isRenaming, setIsRenaming] = useState(false);
   const [title, setTitle] = useState(selectedPlaylist?.title || "");
@@ -207,6 +217,24 @@ const Playlist = ({
               )}
               {!isRenaming ? (
                 <div className="heading-actions">
+                  <button
+                    type="button"
+                    className={`button secondary download-button ${
+                      downloadBusy ? "is-preparing" : ""
+                    }`}
+                    aria-label={`${selectedPlaylist.title} MP3 ZIP 다운로드`}
+                    onClick={onDownload}
+                    disabled={downloadBusy || selectedPlaylist.tracks.length === 0}
+                  >
+                    <FiDownload />
+                    <span>
+                      {downloadStatus
+                        ? `준비 중 ${downloadStatus.completed}/${downloadStatus.total}`
+                        : downloadBusy
+                        ? "준비 중"
+                        : "MP3 ZIP"}
+                    </span>
+                  </button>
                   <button
                     type="button"
                     className="icon-button"
