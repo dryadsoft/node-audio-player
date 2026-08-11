@@ -201,12 +201,12 @@ export class PlaylistDownloadService implements OnModuleInit, OnModuleDestroy {
       job.status = 'ready';
       job.expiresAt = Date.now() + DOWNLOAD_TTL_MS;
     } catch (error) {
-      job.status = 'failed';
       job.error = currentTrack
         ? `${currentTrack} 파일을 준비하지 못했습니다.`
         : '다운로드 파일을 준비하지 못했습니다.';
       job.expiresAt = Date.now() + DOWNLOAD_TTL_MS;
       await fs.rm(job.workDirectory, { recursive: true, force: true });
+      job.status = 'failed';
     }
   }
 
