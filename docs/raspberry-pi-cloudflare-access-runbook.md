@@ -168,16 +168,33 @@ Pi의 실제 Node 경로를 먼저 확인한다.
 ```sh
 readlink -f /proc/$(sudo ss -ltnp 'sport = :4000' \
   | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' | head -n1)/exe
+uname -m
+getconf LONG_BIT
 ```
 
-NVM을 사용한다면 해당 Node 버전의 `bin`과 PM2 경로를 `PATH`에 추가한다.
+이 저장소는 Node.js 24 LTS가 필요하다. Pi OS와 아키텍처에서 Node 24를 실행할
+수 있는지 먼저 확인한다. 실행할 수 없으면 현재 서비스를 변경하지 않는다.
+NVM을 사용한다면 Node 24를 선택하고 실제 버전을 다시 확인한다.
 
 ```sh
-export PATH=/home/pi/.nvm/versions/node/v16.18.1/bin:/home/pi/.yarn-global/bin:/usr/local/bin:/usr/bin:/bin
+export NVM_DIR=/home/pi/.nvm
+. "$NVM_DIR/nvm.sh"
+nvm use 24
+node --version
 cd /home/pi/workspace/node-audio-player/server-nestjs
 mkdir -p data/audio-cache
 export AUDIO_CACHE_PATH="$PWD/data/audio-cache"
+export LESSON_PLAN_DB_PATH="$PWD/data/lesson-plans.sqlite"
+export LESSON_PLAN_BACKUP_DIR="$PWD/data/backups"
+
+if [ -f "$LESSON_PLAN_DB_PATH" ] && [ -f dist/database/backup.js ]; then
+  npm run db:backup
+fi
+
+npm ci --include=dev
 npm run build
+npm test -- --runInBand --no-watchman
+npm run test:e2e -- --runInBand --no-watchman
 pm2 restart nmp --update-env
 pm2 save
 ```

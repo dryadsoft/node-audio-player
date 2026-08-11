@@ -1,5 +1,7 @@
 ## Server with Nest.js
 
+Node.js 24 LTS is required. The server uses the built-in `node:sqlite` module.
+
 ## pm2
 
 ```s
@@ -38,3 +40,28 @@ npm run start:dev
 `DOWNLOAD_WORK_PATH` must be writable by the NestJS account. Jobs run one at a
 time, ready files expire after one hour, and generated work is removed after a
 download or server restart.
+
+## Lesson plan SQLite data
+
+Lesson locations and 12-week plans are stored in a SQLite database outside the
+source tree.
+
+```sh
+export LESSON_PLAN_DB_PATH="$PWD/data/lesson-plans.sqlite"
+npm run start:dev
+```
+
+`LESSON_PLAN_DB_PATH` defaults to the path above. The database uses foreign-key
+constraints, WAL mode, startup migrations, and optimistic revisions. Do not
+commit the database, WAL files, or backups.
+
+Build the server before running a verified online backup:
+
+```sh
+npm run build
+export LESSON_PLAN_BACKUP_DIR="$PWD/data/backups"
+npm run db:backup
+```
+
+The command prints the timestamped backup path after SQLite reports a valid
+copy.

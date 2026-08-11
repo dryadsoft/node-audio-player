@@ -47,11 +47,17 @@ deployment backup.
 
 Build both active applications. Restart PM2 only after the NestJS build passes.
 
+The active applications require Node.js 24 LTS. Confirm `node --version` reports
+`v24.x` before installing dependencies. If the Pi OS or architecture cannot run
+Node 24, stop before changing the current service.
+
 ```sh
 cd /home/pi/workspace/node-audio-player/server-nestjs
+node --version
 npm ci --include=dev
 mkdir -p data/audio-cache
 export AUDIO_CACHE_PATH="$PWD/data/audio-cache"
+export LESSON_PLAN_DB_PATH="$PWD/data/lesson-plans.sqlite"
 npm run build
 npm test -- --runInBand
 npm run test:e2e -- --runInBand
