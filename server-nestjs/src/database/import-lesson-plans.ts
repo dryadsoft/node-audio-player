@@ -1,7 +1,11 @@
 import { createHash, randomUUID } from 'crypto';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-import { LESSON_TERMS, LessonTerm } from '../lesson-plan/lesson-plan.interface';
+import {
+  LESSON_TERMS,
+  LessonPlanDocumentFields,
+  LessonTerm,
+} from '../lesson-plan/lesson-plan.interface';
 import { SqliteService } from './sqlite.service';
 
 export interface LessonPlanImportWeek {
@@ -10,7 +14,8 @@ export interface LessonPlanImportWeek {
   content: string;
 }
 
-export interface LessonPlanImportRecord {
+export interface LessonPlanImportRecord
+  extends Partial<LessonPlanDocumentFields> {
   sourcePath: string;
   sourceSha256: string;
   year: number;
@@ -43,12 +48,37 @@ export interface LessonPlanImportManifest {
 
 export interface LessonPlanImportResult {
   imported: number;
+  enriched: number;
   skipped: number;
   total: number;
 }
 
 const normalizeText = (value: string) =>
   value.normalize('NFC').trim().replace(/\s+/g, ' ');
+
+const normalizeDocumentText = (value: string) =>
+  value
+    .normalize('NFC')
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.trim().replace(/[ \t]+/g, ' '))
+    .join('\n')
+    .trim();
+
+const DOCUMENT_FIELDS: Array<keyof LessonPlanDocumentFields> = [
+  'documentTitle',
+  'courseName',
+  'instructorName',
+  'representativeProfile',
+  'courseIntroduction',
+  'audience',
+  'capacity',
+  'scheduleDetails',
+  'tuition',
+  'materialFee',
+  'openLecture',
+  'notice',
+];
 
 const sha256 = (value: string) =>
   createHash('sha256').update(value).digest('hex');
@@ -70,7 +100,10 @@ export const validateLessonPlanManifest = (
     throw new Error('manifest 형식이 올바르지 않습니다.');
   }
   const manifest = value as LessonPlanImportManifest;
-  if (manifest.schemaVersion !== 1 || !Array.isArray(manifest.plans)) {
+  if (
+    ![1, 2].includes(manifest.schemaVersion) ||
+    !Array.isArray(manifest.plans)
+  ) {
     throw new Error('지원하지 않는 manifest 버전입니다.');
   }
   const { manifestSha256, ...body } = manifest;
@@ -96,6 +129,11 @@ export const validateLessonPlanManifest = (
     assertString(plan.locationName, '장소');
     assertString(plan.programName, '프로그램명');
     assertString(plan.sectionName, '수업 구분', true);
+    if (manifest.schemaVersion === 2) {
+      for (const field of DOCUMENT_FIELDS) {
+        assertString(plan[field], field, true);
+      }
+    }
     if (!/^[a-f0-9]{64}$/.test(plan.sourceSha256)) {
       throw new Error(`원본 체크섬이 올바르지 않습니다: ${plan.sourcePath}`);
     }
@@ -155,11 +193,25 @@ export const importLessonPlanManifest = (
   const manifest = validateLessonPlanManifest(manifestValue);
   return sqlite.transaction((database) => {
     let imported = 0;
+    let enriched = 0;
     let skipped = 0;
     const now = new Date().toISOString();
     const findSource = database.prepare(
-      `SELECT plan_id FROM lesson_plan_import_sources
+      `SELECT plan_id, metadata_version FROM lesson_plan_import_sources
        WHERE source_path = ? AND source_sha256 = ?`,
+    );
+    const enrichPlan = database.prepare(
+      `UPDATE lesson_plans
+       SET document_title = ?, course_name = ?, instructor_name = ?,
+           representative_profile = ?, course_introduction = ?, audience = ?,
+           capacity = ?, schedule_details = ?, tuition = ?, material_fee = ?,
+           open_lecture = ?, notice = ?, revision = revision + 1,
+           updated_at = ?
+       WHERE id = ?`,
+    );
+    const markMetadataVersion = database.prepare(
+      `UPDATE lesson_plan_import_sources SET metadata_version = ?
+       WHERE plan_id = ?`,
     );
     const findLocation = database.prepare(
       'SELECT id FROM lesson_locations WHERE normalized_name = ?',
@@ -177,8 +229,12 @@ export const importLessonPlanManifest = (
     const insertPlan = database.prepare(
       `INSERT INTO lesson_plans
        (id, year, term, location_id, program_name, section_name,
+        document_title, course_name, instructor_name,
+        representative_profile, course_introduction, audience, capacity,
+        schedule_details, tuition, material_fee, open_lecture, notice,
         revision, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+               1, ?, ?)`,
     );
     const insertWeek = database.prepare(
       `INSERT INTO lesson_weeks (plan_id, week, class_name, content)
@@ -186,14 +242,31 @@ export const importLessonPlanManifest = (
     );
     const insertSource = database.prepare(
       `INSERT INTO lesson_plan_import_sources
-       (plan_id, source_path, source_sha256, imported_at)
-       VALUES (?, ?, ?, ?)`,
+       (plan_id, source_path, source_sha256, imported_at, metadata_version)
+       VALUES (?, ?, ?, ?, ?)`,
     );
 
     for (const source of manifest.plans) {
-      if (
-        findSource.get(source.sourcePath.normalize('NFC'), source.sourceSha256)
-      ) {
+      const existingSource = findSource.get(
+        source.sourcePath.normalize('NFC'),
+        source.sourceSha256,
+      ) as { plan_id: string; metadata_version: number } | undefined;
+      if (existingSource) {
+        if (
+          manifest.schemaVersion === 2 &&
+          existingSource.metadata_version < 2
+        ) {
+          enrichPlan.run(
+            ...DOCUMENT_FIELDS.map((field) =>
+              normalizeDocumentText(source[field] || ''),
+            ),
+            now,
+            existingSource.plan_id,
+          );
+          markMetadataVersion.run(2, existingSource.plan_id);
+          enriched += 1;
+          continue;
+        }
         skipped += 1;
         continue;
       }
@@ -235,6 +308,11 @@ export const importLessonPlanManifest = (
         location.id,
         programName,
         sectionName,
+        ...DOCUMENT_FIELDS.map((field) =>
+          manifest.schemaVersion === 2
+            ? normalizeDocumentText(source[field] || '')
+            : '',
+        ),
         now,
         now,
       );
@@ -251,10 +329,11 @@ export const importLessonPlanManifest = (
         source.sourcePath.normalize('NFC'),
         source.sourceSha256,
         now,
+        manifest.schemaVersion,
       );
       imported += 1;
     }
-    return { imported, skipped, total: manifest.plans.length };
+    return { imported, enriched, skipped, total: manifest.plans.length };
   });
 };
 

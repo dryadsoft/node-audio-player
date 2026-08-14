@@ -150,6 +150,77 @@ const cleanMarkdownCell = (value) =>
       .replace(/\\([\\`*{}\[\]()#+\-.!_>~|])/g, '$1'),
   );
 
+const cleanDocumentCell = (value) =>
+  value
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/\*\*|__/g, '')
+    .replace(/\\([\\`*{}\[\]()#+\-.!_>~|])/g, '$1')
+    .normalize('NFC')
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.trim().replace(/[ \t]+/g, ' '))
+    .join('\n')
+    .trim();
+
+const normalizeLabel = (value) =>
+  value.replace(/\s+/g, '').replace(/[()/]/g, '');
+
+const TERM_LABELS = {
+  spring: '봄학기',
+  summer: '여름학기',
+  fall: '가을학기',
+  winter: '겨울학기',
+};
+
+const DEFAULT_NOTICE = '※ 사정상 수업의 순서는 바뀔 수 있습니다.';
+
+export const parseDocumentFields = (markdown, metadata) => {
+  const lines = markdown.split(/\r?\n/);
+  const title = cleanDocumentCell(
+    lines.find((line) => line.trim() && !line.trim().startsWith('|')) || '',
+  );
+  const notice = cleanDocumentCell(
+    lines.find((line) => line.trim().startsWith('※')) || DEFAULT_NOTICE,
+  );
+  const rows = lines
+    .filter((line) => line.trim().startsWith('|'))
+    .map((line) => splitMarkdownRow(line).map(cleanDocumentCell))
+    .filter(
+      (cells) => !cells.every((cell) => !cell || /^:?-{3,}:?$/.test(cell)),
+    );
+
+  const findValue = (...labels) => {
+    for (const cells of rows) {
+      const index = cells.findIndex((cell) =>
+        labels.some((label) => normalizeLabel(cell).includes(label)),
+      );
+      if (index === -1) continue;
+      for (const value of cells.slice(index + 1)) {
+        if (value && !labels.includes(normalizeLabel(value))) return value;
+      }
+      return '';
+    }
+    return '';
+  };
+
+  const courseName = findValue('강좌명') || metadata.programName;
+  return {
+    documentTitle:
+      title || `${courseName} 강의계획서 - ${TERM_LABELS[metadata.term]}`,
+    courseName,
+    instructorName: findValue('강사명'),
+    representativeProfile: findValue('대표프로필'),
+    courseIntroduction: findValue('강좌소개'),
+    audience: findValue('강의대상'),
+    capacity: findValue('정원'),
+    scheduleDetails: findValue('세부연령개월강의일정포함', '세부연령개월'),
+    tuition: findValue('교육비'),
+    materialFee: findValue('교재비'),
+    openLecture: findValue('공개강좌'),
+    notice,
+  };
+};
+
 export const parseLessonWeeks = (markdown) => {
   const rows = new Map();
   for (const line of markdown.split(/\r?\n/)) {
@@ -255,6 +326,7 @@ export const extractLessonPlans = async (options) => {
       sourcePath: source.sourcePath,
       sourceSha256: source.sourceSha256,
       ...metadata,
+      ...parseDocumentFields(markdown, metadata),
       weeks: parseLessonWeeks(markdown),
     });
   }
@@ -286,7 +358,7 @@ export const extractLessonPlans = async (options) => {
       ]),
   );
   const manifestBody = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     createdAt: new Date().toISOString(),
     source: {
       directoryName: basename(options.source).normalize('NFC'),

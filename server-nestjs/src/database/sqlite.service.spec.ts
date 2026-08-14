@@ -77,7 +77,8 @@ describe('SqliteService migrations', () => {
       expect(
         sqlite.database
           .prepare(
-            `SELECT id, program_name, section_name, revision
+            `SELECT id, program_name, section_name, document_title,
+                    course_name, notice, revision
              FROM lesson_plans WHERE id = 'plan-1'`,
           )
           .get(),
@@ -85,8 +86,16 @@ describe('SqliteService migrations', () => {
         id: 'plan-1',
         program_name: '오감별',
         section_name: '',
+        document_title: '',
+        course_name: '',
+        notice: '',
         revision: 3,
       });
+      expect(
+        sqlite.database
+          .prepare('SELECT MAX(version) AS version FROM schema_migrations')
+          .get(),
+      ).toEqual({ version: 3 });
       expect(
         sqlite.database
           .prepare(

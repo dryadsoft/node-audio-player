@@ -1,9 +1,41 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  parseDocumentFields,
   parseLessonWeeks,
   parseSourceMetadata,
 } from './extract-lesson-plans.mjs';
+
+test('extracts legacy document header fields and notice', () => {
+  const fields = parseDocumentFields(
+    `오감별 강의계획서 - 봄학기(상상놀이터! 오감별)
+
+| 강좌명 | 오감별 / &Gym | 강사명 | 홍길동 | 대표 프로필 | 오감별 대표 |
+| --- | --- | --- | --- | --- | --- |
+| 강좌 소개 | 첫째 줄<br>둘째 줄 | 첫째 줄<br>둘째 줄 | 첫째 줄<br>둘째 줄 | 첫째 줄<br>둘째 줄 | 첫째 줄<br>둘째 줄 |
+| 강의 대상 | 베이비 엔 토들러 | 정원 | 12명 | 세부 연령 / 개월 (강의 일정 포함) | 10:00 ~ 10:40 5 ~ 12개월 |
+| 교육비 | 110,000원 | 교재비 | 30,000원 | | |
+| 공개강좌 | 3월 2일 | | | | |
+
+※ 사정상 수업의 순서는 변경될 수 있습니다.`,
+    { programName: '오감별', term: 'spring' },
+  );
+
+  assert.deepEqual(fields, {
+    documentTitle: '오감별 강의계획서 - 봄학기(상상놀이터! 오감별)',
+    courseName: '오감별 / &Gym',
+    instructorName: '홍길동',
+    representativeProfile: '오감별 대표',
+    courseIntroduction: '첫째 줄\n둘째 줄',
+    audience: '베이비 엔 토들러',
+    capacity: '12명',
+    scheduleDetails: '10:00 ~ 10:40 5 ~ 12개월',
+    tuition: '110,000원',
+    materialFee: '30,000원',
+    openLecture: '3월 2일',
+    notice: '※ 사정상 수업의 순서는 변경될 수 있습니다.',
+  });
+});
 
 test('parses folder, program, place, weekday, and duration metadata', () => {
   assert.deepEqual(

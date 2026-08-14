@@ -52,6 +52,9 @@ describe('LessonPlanService', () => {
       completedWeeks: 4,
       status: 'draft',
       revision: 1,
+      documentTitle: '오감별 강의계획서 - 봄학기',
+      courseName: '오감별',
+      notice: '※ 사정상 수업의 순서는 바뀔 수 있습니다.',
     });
     expect(created.weeks).toHaveLength(12);
     expect(plans.list({ year: '2026', term: 'spring' })).toHaveLength(1);
@@ -127,6 +130,7 @@ describe('LessonPlanService', () => {
       status: 'complete',
       programName: '뮤직별',
       sectionName: '수요일',
+      courseName: '오감별',
       revision: 2,
     });
     expect(() =>
@@ -141,6 +145,34 @@ describe('LessonPlanService', () => {
       }),
     ).toThrow(ConflictException);
     expect(plans.get(created.id).completedWeeks).toBe(12);
+  });
+
+  it('updates document metadata and preserves omitted fields', () => {
+    const location = locations.create('은평 배움터');
+    const created = plans.create({
+      year: 2026,
+      term: 'spring',
+      locationId: location.id,
+      programName: '오감별',
+      sectionName: '',
+      instructorName: '김강사',
+      courseIntroduction: '첫 소개',
+      weeks: weeks(),
+    });
+
+    const updated = plans.update(created.id, {
+      year: 2026,
+      term: 'spring',
+      locationId: location.id,
+      programName: '오감별',
+      sectionName: '',
+      courseIntroduction: '수정된 소개\n둘째 줄',
+      weeks: weeks(),
+      expectedRevision: created.revision,
+    });
+
+    expect(updated.instructorName).toBe('김강사');
+    expect(updated.courseIntroduction).toBe('수정된 소개\n둘째 줄');
   });
 
   it('keeps inactive locations in history but blocks new plans', () => {

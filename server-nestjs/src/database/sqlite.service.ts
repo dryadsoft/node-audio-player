@@ -8,7 +8,7 @@ import { mkdirSync } from 'fs';
 import { dirname, resolve } from 'path';
 import { loadSqlite, SqliteDatabase } from './sqlite.types';
 
-const MIGRATION_VERSION = 2;
+const MIGRATION_VERSION = 3;
 
 @Injectable()
 export class SqliteService implements OnModuleInit, OnModuleDestroy {
@@ -185,6 +185,35 @@ export class SqliteService implements OnModuleInit, OnModuleDestroy {
             ON UPDATE CASCADE ON DELETE CASCADE,
           UNIQUE (source_path, source_sha256)
         );
+      `);
+        } else if (version === 3) {
+          database.exec(`
+        ALTER TABLE lesson_plans
+          ADD COLUMN document_title TEXT NOT NULL DEFAULT '';
+        ALTER TABLE lesson_plans
+          ADD COLUMN course_name TEXT NOT NULL DEFAULT '';
+        ALTER TABLE lesson_plans
+          ADD COLUMN instructor_name TEXT NOT NULL DEFAULT '';
+        ALTER TABLE lesson_plans
+          ADD COLUMN representative_profile TEXT NOT NULL DEFAULT '';
+        ALTER TABLE lesson_plans
+          ADD COLUMN course_introduction TEXT NOT NULL DEFAULT '';
+        ALTER TABLE lesson_plans
+          ADD COLUMN audience TEXT NOT NULL DEFAULT '';
+        ALTER TABLE lesson_plans
+          ADD COLUMN capacity TEXT NOT NULL DEFAULT '';
+        ALTER TABLE lesson_plans
+          ADD COLUMN schedule_details TEXT NOT NULL DEFAULT '';
+        ALTER TABLE lesson_plans
+          ADD COLUMN tuition TEXT NOT NULL DEFAULT '';
+        ALTER TABLE lesson_plans
+          ADD COLUMN material_fee TEXT NOT NULL DEFAULT '';
+        ALTER TABLE lesson_plans
+          ADD COLUMN open_lecture TEXT NOT NULL DEFAULT '';
+        ALTER TABLE lesson_plans
+          ADD COLUMN notice TEXT NOT NULL DEFAULT '';
+        ALTER TABLE lesson_plan_import_sources
+          ADD COLUMN metadata_version INTEGER NOT NULL DEFAULT 1;
       `);
         }
         database

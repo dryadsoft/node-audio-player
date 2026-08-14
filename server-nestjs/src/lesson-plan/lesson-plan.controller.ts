@@ -1,9 +1,23 @@
-import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+  Res,
+} from '@nestjs/common';
+import { Response } from 'express';
+import { LessonPlanDocumentService } from './lesson-plan-document.service';
 import { LessonPlanService } from './lesson-plan.service';
 
 @Controller('api/lesson-plans')
 export class LessonPlanController {
-  constructor(private readonly plans: LessonPlanService) {}
+  constructor(
+    private readonly plans: LessonPlanService,
+    private readonly documents: LessonPlanDocumentService,
+  ) {}
 
   @Get()
   list(
@@ -18,6 +32,24 @@ export class LessonPlanController {
   @Get(':planId')
   get(@Param('planId') planId: string) {
     return this.plans.get(planId);
+  }
+
+  @Get(':planId/docx')
+  async docx(@Param('planId') planId: string, @Res() response: Response) {
+    const document = await this.documents.create(planId);
+    const encodedName = encodeURIComponent(document.fileName).replace(
+      /'/g,
+      '%27',
+    );
+    response.set({
+      'Content-Type':
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'Content-Disposition': `attachment; filename="lesson-plan.docx"; filename*=UTF-8''${encodedName}`,
+      'Content-Length': String(document.buffer.length),
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
+    });
+    response.send(document.buffer);
   }
 
   @Post()

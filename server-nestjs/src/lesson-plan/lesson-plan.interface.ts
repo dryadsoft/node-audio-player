@@ -16,6 +16,21 @@ export interface LessonWeek {
   content: string;
 }
 
+export interface LessonPlanDocumentFields {
+  documentTitle: string;
+  courseName: string;
+  instructorName: string;
+  representativeProfile: string;
+  courseIntroduction: string;
+  audience: string;
+  capacity: string;
+  scheduleDetails: string;
+  tuition: string;
+  materialFee: string;
+  openLecture: string;
+  notice: string;
+}
+
 export interface LessonPlanSummary {
   id: string;
   year: number;
@@ -32,6 +47,8 @@ export interface LessonPlanSummary {
   updatedAt: string;
 }
 
-export interface LessonPlanResponse extends LessonPlanSummary {
+export interface LessonPlanResponse
+  extends LessonPlanSummary,
+    LessonPlanDocumentFields {
   weeks: LessonWeek[];
 }

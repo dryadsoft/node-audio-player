@@ -154,7 +154,28 @@ describe('AppController (e2e)', () => {
       programName: '오감별',
       sectionName: '월요일',
       revision: 1,
+      documentTitle: '오감별 강의계획서 - 봄학기',
+      courseName: '오감별',
     });
+
+    const downloaded = await request(app.getHttpServer())
+      .get(`/api/lesson-plans/${created.body.id}/docx`)
+      .buffer(true)
+      .parse((response, callback) => {
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+        response.on('end', () => callback(null, Buffer.concat(chunks)));
+      })
+      .expect(200)
+      .expect(
+        'Content-Type',
+        /application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document/,
+      )
+      .expect('Cache-Control', 'private, no-store');
+    expect(downloaded.headers['content-disposition']).toContain(
+      "filename*=UTF-8''",
+    );
+    expect(Buffer.from(downloaded.body).subarray(0, 2).toString()).toBe('PK');
 
     const listed = await request(app.getHttpServer())
       .get('/api/lesson-plans')
