@@ -89,6 +89,11 @@ npm run lesson-plans:import -- \
 ```
 
 The importer creates missing locations, preserves incomplete plans as 12 rows
-with blanks, and records source paths and checksums. Reapplying the same
-manifest is safe. A different source that collides with an existing plan aborts
-the transaction without overwriting data.
+with blanks, imports the HWP document header fields, and records source paths
+and checksums. Reapplying the same manifest is safe. A version 2 manifest
+enriches a matching legacy import once without replacing its weeks. A different
+source that collides with an existing plan aborts the transaction without
+overwriting data.
+
+Saved plans can be downloaded in the canonical HWP-style Word layout from
+`GET /api/lesson-plans/:planId/docx`.

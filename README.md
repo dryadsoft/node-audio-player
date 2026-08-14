@@ -67,5 +67,6 @@ Raspberry Pi 운영 환경은 공개 포트 대신 Cloudflare Tunnel과 Access�
 ## 강의계획서
 
 `/lesson-plans`에서 장소별 봄·여름·가을·겨울학기 12주 계획서를 관리합니다.
+선택한 계획서는 기존 HWP 표 형식을 따른 DOCX로 다운로드할 수 있습니다.
 NestJS stores this data in SQLite. See `server-nestjs/README.md` for the data
 path and backup command.
