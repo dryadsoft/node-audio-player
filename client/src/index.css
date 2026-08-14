@@ -3,6 +3,7 @@
 @tailwind utilities;
 
 :root {
+  color-scheme: dark;
   --ink: #e7e8df;
   --muted: #929a99;
   --canvas: #101615;
@@ -13,6 +14,56 @@
   --accent-soft: #3d321d;
   --danger: #ee7a70;
   --success: #70c9a6;
+  --canvas-deep-rgb: 11, 17, 16;
+  --panel-rgb: 23, 32, 31;
+  --line-rgb: 52, 64, 61;
+  --accent-rgb: 232, 173, 63;
+  --danger-rgb: 238, 122, 112;
+  --success-rgb: 112, 201, 166;
+  --shadow-rgb: 0, 0, 0;
+  --overlay-rgb: 3, 7, 6;
+  --texture-rgb: 255, 255, 255;
+  --body-start: #0d1312;
+  --body-mid: #131b1a;
+  --body-end: #0c1211;
+  --control: #0f1716;
+  --row: #111918;
+  --text-on-accent: #1b160d;
+  --error-ink: #ff9b8f;
+  --accent-ink: #e9c47c;
+  --detail-ink: #c2c8c4;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --ink: #252b29;
+  --muted: #64706c;
+  --canvas: #f4f0e6;
+  --panel: #fffdf8;
+  --panel-soft: #ece8dd;
+  --line: #c8c1b3;
+  --accent: #9a6400;
+  --accent-soft: #f4e4bd;
+  --danger: #b8453d;
+  --success: #28745b;
+  --canvas-deep-rgb: 244, 240, 230;
+  --panel-rgb: 255, 253, 248;
+  --line-rgb: 200, 193, 179;
+  --accent-rgb: 154, 100, 0;
+  --danger-rgb: 184, 69, 61;
+  --success-rgb: 40, 116, 91;
+  --shadow-rgb: 56, 49, 35;
+  --overlay-rgb: 37, 43, 41;
+  --texture-rgb: 37, 43, 41;
+  --body-start: #f8f4eb;
+  --body-mid: #f2ede2;
+  --body-end: #ebe5d8;
+  --control: #f8f4eb;
+  --row: #f8f4eb;
+  --text-on-accent: #fffdf8;
+  --error-ink: #a93832;
+  --accent-ink: #79510a;
+  --detail-ink: #46514e;
 }
 
 * {
@@ -29,10 +80,15 @@ body,
 body {
   background: radial-gradient(
       circle at 15% 0%,
-      rgba(232, 173, 63, 0.1),
+      rgba(var(--accent-rgb), 0.1),
       transparent 34rem
     ),
-    linear-gradient(135deg, #0d1312 0%, #131b1a 55%, #0c1211 100%);
+    linear-gradient(
+      135deg,
+      var(--body-start) 0%,
+      var(--body-mid) 55%,
+      var(--body-end) 100%
+    );
   color: var(--ink);
   font-family: "Avenir Next", "Pretendard", "Apple SD Gothic Neo", sans-serif;
 }
@@ -71,8 +127,8 @@ textarea:focus-visible {
   padding: 18px 22px;
   border: 1px solid var(--line);
   border-radius: 18px;
-  background: rgba(23, 32, 31, 0.92);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+  background: rgba(var(--panel-rgb), 0.92);
+  box-shadow: 0 24px 60px rgba(var(--shadow-rgb), 0.28);
   backdrop-filter: blur(16px);
 }
 
@@ -162,7 +218,7 @@ h2 {
 }
 
 .now-playing.error {
-  color: #ff9b8f;
+  color: var(--error-ink);
 }
 
 .workspace {
@@ -181,8 +237,8 @@ h2 {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 18px;
-  background: rgba(23, 32, 31, 0.94);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.24);
+  background: rgba(var(--panel-rgb), 0.94);
+  box-shadow: 0 24px 60px rgba(var(--shadow-rgb), 0.24);
 }
 
 .library-panel {
@@ -209,7 +265,7 @@ h2 {
   padding: 7px 7px 7px 13px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: #0f1716;
+  background: var(--control);
 }
 
 .search-form > svg {
@@ -221,7 +277,7 @@ select {
   min-width: 0;
   border: 1px solid var(--line);
   border-radius: 9px;
-  background: #0f1716;
+  background: var(--control);
   color: var(--ink);
 }
 
@@ -239,7 +295,7 @@ textarea {
   min-width: 0;
   border: 1px solid var(--line);
   border-radius: 9px;
-  background: #0f1716;
+  background: var(--control);
   color: var(--ink);
   resize: vertical;
 }
@@ -300,7 +356,7 @@ textarea {
 .button.accent,
 .icon-button.accent {
   background: var(--accent);
-  color: #1b160d;
+  color: var(--text-on-accent);
 }
 
 .button.secondary {
@@ -406,7 +462,7 @@ textarea {
   align-items: center;
   padding: 8px 12px;
   border: 0;
-  border-bottom: 1px solid rgba(52, 64, 61, 0.65);
+  border-bottom: 1px solid rgba(var(--line-rgb), 0.65);
   background: transparent;
   cursor: pointer;
   text-align: left;
@@ -440,7 +496,7 @@ textarea {
   padding: 4px 6px;
   border: 1px solid transparent;
   border-radius: 11px;
-  background: #111918;
+  background: var(--row);
   transition: border-color 150ms ease, background 150ms ease, opacity 150ms ease;
 }
 
@@ -455,7 +511,7 @@ textarea {
 
 .track-row.is-missing {
   border-style: dashed;
-  border-color: rgba(238, 122, 112, 0.45);
+  border-color: rgba(var(--danger-rgb), 0.45);
 }
 
 .track-main {
@@ -516,7 +572,7 @@ textarea {
   min-width: 0;
   padding: 20px 14px;
   border-right: 1px solid var(--line);
-  background: rgba(11, 17, 16, 0.5);
+  background: rgba(var(--canvas-deep-rgb), 0.5);
 }
 
 .playlist-title-list {
@@ -562,7 +618,7 @@ textarea {
 }
 
 .playlist-title-list button.active {
-  border-color: rgba(232, 173, 63, 0.5);
+  border-color: rgba(var(--accent-rgb), 0.5);
   color: var(--accent);
 }
 
@@ -594,8 +650,8 @@ textarea {
 }
 
 .download-button.is-preparing {
-  border-color: rgba(232, 173, 63, 0.55);
-  background: rgba(232, 173, 63, 0.1);
+  border-color: rgba(var(--accent-rgb), 0.55);
+  background: rgba(var(--accent-rgb), 0.1);
   color: var(--accent);
 }
 
@@ -638,7 +694,7 @@ textarea {
 .playlist-dropzone.is-over,
 .panel-empty.is-over {
   border-color: var(--accent);
-  background: rgba(232, 173, 63, 0.08);
+  background: rgba(var(--accent-rgb), 0.08);
 }
 
 .empty-state,
@@ -697,8 +753,8 @@ textarea {
   padding: 11px 15px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: #0c1211;
-  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.4);
+  background: var(--body-end);
+  box-shadow: 0 12px 34px rgba(var(--shadow-rgb), 0.4);
   opacity: 0;
   pointer-events: none;
   transform: translateY(8px);
@@ -717,7 +773,7 @@ textarea {
 }
 
 .status-message.error {
-  border-color: rgba(238, 122, 112, 0.6);
+  border-color: rgba(var(--danger-rgb), 0.6);
 }
 
 .notice-close {
@@ -745,7 +801,7 @@ textarea {
   display: grid;
   padding: 20px;
   place-items: center;
-  background: rgba(3, 7, 6, 0.76);
+  background: rgba(var(--overlay-rgb), 0.76);
   backdrop-filter: blur(8px);
 }
 
@@ -755,7 +811,7 @@ textarea {
   border: 1px solid var(--line);
   border-radius: 16px;
   background: var(--panel);
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 30px 80px rgba(var(--shadow-rgb), 0.55);
 }
 
 .dialog-card p {
@@ -796,7 +852,7 @@ textarea {
   border: 1px solid var(--accent);
   border-radius: 10px;
   background: var(--panel);
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 18px 44px rgba(var(--shadow-rgb), 0.5);
   color: var(--ink);
   font-weight: 800;
 }
@@ -852,7 +908,7 @@ textarea {
 
   .mobile-tabs button.active {
     background: var(--accent);
-    color: #1b160d;
+    color: var(--text-on-accent);
   }
 
   .workspace {
@@ -995,10 +1051,16 @@ textarea {
   gap: 5px;
   margin: 0 auto 10px;
   padding: 4px;
-  border: 1px solid rgba(52, 64, 61, 0.78);
+  border: 1px solid rgba(var(--line-rgb), 0.78);
   border-radius: 12px;
-  background: rgba(11, 17, 16, 0.76);
+  background: rgba(var(--canvas-deep-rgb), 0.76);
   backdrop-filter: blur(14px);
+}
+
+.app-navigation-links {
+  display: flex;
+  min-width: 0;
+  gap: 5px;
 }
 
 .app-navigation a {
@@ -1020,7 +1082,35 @@ textarea {
 }
 .app-navigation a.active {
   background: var(--accent);
-  color: #1b160d;
+  color: var(--text-on-accent);
+}
+
+.theme-toggle {
+  display: inline-flex;
+  min-width: 88px;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 800;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+}
+
+.theme-toggle svg {
+  color: var(--accent);
+  font-size: 1rem;
+}
+
+.theme-toggle:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .lesson-shell {
@@ -1049,15 +1139,15 @@ textarea {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 18px;
-  background: linear-gradient(110deg, rgba(232, 173, 63, 0.12), transparent 38%),
+  background: linear-gradient(110deg, rgba(var(--accent-rgb), 0.12), transparent 38%),
     repeating-linear-gradient(
       90deg,
       transparent 0,
       transparent 47px,
-      rgba(255, 255, 255, 0.018) 48px
+      rgba(var(--texture-rgb), 0.018) 48px
     ),
-    rgba(23, 32, 31, 0.95);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
+    rgba(var(--panel-rgb), 0.95);
+  box-shadow: 0 24px 60px rgba(var(--shadow-rgb), 0.25);
 }
 
 .lesson-hero::after {
@@ -1066,7 +1156,7 @@ textarea {
   bottom: -34px;
   width: 190px;
   height: 70px;
-  border: 1px solid rgba(232, 173, 63, 0.22);
+  border: 1px solid rgba(var(--accent-rgb), 0.22);
   border-radius: 50%;
   content: "";
   transform: rotate(-8deg);
@@ -1123,7 +1213,7 @@ textarea {
   padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: rgba(23, 32, 31, 0.88);
+  background: rgba(var(--panel-rgb), 0.88);
 }
 
 .lesson-toolbar label > span,
@@ -1164,8 +1254,8 @@ textarea {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 17px;
-  background: rgba(23, 32, 31, 0.94);
-  box-shadow: 0 22px 50px rgba(0, 0, 0, 0.23);
+  background: rgba(var(--panel-rgb), 0.94);
+  box-shadow: 0 22px 50px rgba(var(--shadow-rgb), 0.23);
 }
 
 .plan-browser {
@@ -1211,7 +1301,7 @@ textarea {
   padding: 9px 10px;
   border: 1px solid transparent;
   border-radius: 11px;
-  background: #111918;
+  background: var(--row);
   cursor: pointer;
   text-align: left;
 }
@@ -1222,7 +1312,7 @@ textarea {
   background: var(--panel-soft);
 }
 .plan-card.active {
-  border-color: rgba(232, 173, 63, 0.55);
+  border-color: rgba(var(--accent-rgb), 0.55);
 }
 
 .term-swatch {
@@ -1281,8 +1371,8 @@ textarea {
 }
 
 .completion-badge.complete {
-  border-color: rgba(112, 201, 166, 0.45);
-  background: rgba(112, 201, 166, 0.08);
+  border-color: rgba(var(--success-rgb), 0.45);
+  background: rgba(var(--success-rgb), 0.08);
   color: var(--success);
 }
 
@@ -1341,7 +1431,7 @@ textarea {
   padding: 10px 12px;
   border-left: 3px solid var(--accent);
   background: var(--accent-soft);
-  color: #e9c47c;
+  color: var(--accent-ink);
   font-size: 0.78rem;
 }
 
@@ -1356,7 +1446,7 @@ textarea {
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(11, 17, 16, 0.46);
+  background: rgba(var(--canvas-deep-rgb), 0.46);
 }
 
 .copy-weeks-button {
@@ -1390,13 +1480,13 @@ textarea {
 .week-detail-row {
   min-height: 76px;
   padding: 7px 10px;
-  border-bottom: 1px solid rgba(52, 64, 61, 0.62);
+  border-bottom: 1px solid rgba(var(--line-rgb), 0.62);
   transition: background 140ms ease;
 }
 
 .week-editor-row:focus-within,
 .week-detail-row:hover {
-  background: rgba(232, 173, 63, 0.035);
+  background: rgba(var(--accent-rgb), 0.035);
 }
 
 .week-number {
@@ -1435,7 +1525,7 @@ textarea {
   align-items: center;
   padding: 9px 12px;
   border-radius: 9px;
-  background: rgba(11, 17, 16, 0.44);
+  background: rgba(var(--canvas-deep-rgb), 0.44);
 }
 
 .week-detail-row strong,
@@ -1447,7 +1537,7 @@ textarea {
   font-size: 0.86rem;
 }
 .week-detail-row p {
-  color: #c2c8c4;
+  color: var(--detail-ink);
   font-size: 0.82rem;
   line-height: 1.55;
 }
@@ -1464,7 +1554,7 @@ textarea {
   margin: 4px -21px -21px;
   padding: 13px 21px;
   border-top: 1px solid var(--line);
-  background: rgba(23, 32, 31, 0.96);
+  background: rgba(var(--panel-rgb), 0.96);
   backdrop-filter: blur(12px);
 }
 
@@ -1479,7 +1569,7 @@ textarea {
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(11, 17, 16, 0.48);
+  background: rgba(var(--canvas-deep-rgb), 0.48);
 }
 
 .location-create-form > div {
@@ -1495,7 +1585,7 @@ textarea {
   justify-content: space-between;
   gap: 12px;
   padding: 8px 10px;
-  border-bottom: 1px solid rgba(52, 64, 61, 0.62);
+  border-bottom: 1px solid rgba(var(--line-rgb), 0.62);
 }
 
 .location-row.inactive {
@@ -1558,11 +1648,11 @@ textarea {
   align-items: center;
   min-height: 52px;
   padding: 7px 10px;
-  border-bottom: 1px solid rgba(52, 64, 61, 0.58);
+  border-bottom: 1px solid rgba(var(--line-rgb), 0.58);
 }
 
 .copy-week-row.selected {
-  background: rgba(232, 173, 63, 0.07);
+  background: rgba(var(--accent-rgb), 0.07);
 }
 
 .copy-week-row > label {
@@ -1585,6 +1675,9 @@ textarea {
 @media (max-width: 900px) {
   .app-navigation {
     justify-content: stretch;
+  }
+  .app-navigation-links {
+    flex: 1;
   }
   .app-navigation a {
     flex: 1;
@@ -1641,7 +1734,7 @@ textarea {
     padding: 10px;
     border: 1px solid var(--line);
     border-radius: 12px;
-    background: rgba(11, 17, 16, 0.4);
+    background: rgba(var(--canvas-deep-rgb), 0.4);
   }
 
   .week-number {
@@ -1668,6 +1761,13 @@ textarea {
 }
 
 @media (max-width: 560px) {
+  .theme-toggle {
+    min-width: 40px;
+    padding-inline: 0;
+  }
+  .theme-toggle span {
+    display: none;
+  }
   .lesson-hero-mark {
     width: 50px;
     height: 50px;

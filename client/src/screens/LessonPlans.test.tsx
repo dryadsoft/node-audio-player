@@ -2,6 +2,7 @@ import "@testing-library/jest-dom";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "react-query";
 import { MemoryRouter } from "react-router-dom";
+import { ThemeProvider } from "../context/ThemeContext";
 import LessonPlans from "./LessonPlans";
 import { LessonPlan, LessonWeek } from "../types";
 
@@ -52,9 +53,11 @@ const renderScreen = () => {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={["/lesson-plans"]}>
-        <LessonPlans />
-      </MemoryRouter>
+      <ThemeProvider>
+        <MemoryRouter initialEntries={["/lesson-plans"]}>
+          <LessonPlans />
+        </MemoryRouter>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 };

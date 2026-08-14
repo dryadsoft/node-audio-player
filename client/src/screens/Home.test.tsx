@@ -8,6 +8,10 @@ import {
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "react-query";
 import { MemoryRouter } from "react-router-dom";
+import {
+  THEME_STORAGE_KEY,
+  ThemeProvider,
+} from "../context/ThemeContext";
 import Home from "./Home";
 
 const jsonResponse = (payload: unknown, status = 200) =>
@@ -19,6 +23,7 @@ const jsonResponse = (payload: unknown, status = 200) =>
 
 describe("Home", () => {
   beforeEach(() => {
+    window.localStorage.clear();
     jest.spyOn(window, "fetch").mockImplementation((input, options) => {
       const url = String(input);
       if (url === "/api/playlists" && options?.method === "POST") {
@@ -54,12 +59,30 @@ describe("Home", () => {
     });
     return render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <Home />
-        </MemoryRouter>
+        <ThemeProvider>
+          <MemoryRouter>
+            <Home />
+          </MemoryRouter>
+        </ThemeProvider>
       </QueryClientProvider>
     );
   };
+
+  it("switches to light mode and saves the selection", async () => {
+    renderHome();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "라이트 모드로 전환" })
+    );
+
+    expect(
+      screen.getByRole("button", { name: "다크 모드로 전환" })
+    ).toBeInTheDocument();
+    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe("light");
+    await waitFor(() =>
+      expect(document.documentElement).toHaveAttribute("data-theme", "light")
+    );
+  });
 
   it("creates a titled playlist from the empty state", async () => {
     jest.useFakeTimers();
