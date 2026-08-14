@@ -22,7 +22,7 @@ const weeks = (prefix = "봄"): LessonWeek[] =>
   }));
 const plan = (
   id = "plan-1",
-  term: LessonPlan["term"] = "spring"
+  term: LessonPlan["term"] = "spring",
 ): LessonPlan => ({
   id,
   year: currentYear,
@@ -32,6 +32,18 @@ const plan = (
   locationActive: true,
   programName: "오감별",
   sectionName: "월요일",
+  documentTitle: "오감별 강의계획서 - 봄학기",
+  courseName: "오감별",
+  instructorName: "김강사",
+  representativeProfile: "유아 통합놀이 지도 10년",
+  courseIntroduction: "감각을 깨우는 통합놀이 과정입니다.",
+  audience: "12~24개월 영아와 보호자",
+  capacity: "10팀",
+  scheduleDetails: "매주 월요일 10:00~10:50",
+  tuition: "120,000원",
+  materialFee: "20,000원",
+  openLecture: "첫 주 공개",
+  notice: "※ 사정상 수업의 순서는 바뀔 수 있습니다.",
   completedWeeks: 2,
   status: "draft",
   revision: 1,
@@ -58,7 +70,7 @@ const renderScreen = () => {
           <LessonPlans />
         </MemoryRouter>
       </ThemeProvider>
-    </QueryClientProvider>
+    </QueryClientProvider>,
   );
 };
 
@@ -86,13 +98,20 @@ describe("LessonPlans", () => {
     const { container } = renderScreen();
 
     expect(
-      await screen.findByRole("heading", { name: "봄학기 · 서초 문화센터" })
+      await screen.findByRole("heading", { name: "봄학기 · 서초 문화센터" }),
     ).toBeInTheDocument();
     expect(screen.getByText("봄 1주 수업")).toBeInTheDocument();
+    expect(
+      screen.getByText("감각을 깨우는 통합놀이 과정입니다."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /DOCX 다운로드/ })).toHaveAttribute(
+      "href",
+      "/api/lesson-plans/plan-1/docx",
+    );
     expect(container.querySelectorAll(".week-detail-row")).toHaveLength(12);
     expect(screen.getByRole("link", { name: /음악 관리/ })).toHaveAttribute(
       "href",
-      "/"
+      "/",
     );
   });
 
@@ -112,12 +131,12 @@ describe("LessonPlans", () => {
               completedWeeks: 1,
               weeks: (savedBody?.weeks as LessonWeek[]) || [],
             },
-            201
+            201,
           );
         }
         if (url === "/api/lesson-plans") return jsonResponse([]);
         return jsonResponse([]);
-      }
+      },
     );
     renderScreen();
 
@@ -136,6 +155,9 @@ describe("LessonPlans", () => {
     expect(savedBody?.locationId).toBe(location.id);
     expect(savedBody?.programName).toBe("오감별");
     expect(savedBody?.sectionName).toBe("");
+    expect(savedBody?.documentTitle).toBe("오감별 강의계획서 - 봄학기");
+    expect(savedBody?.courseName).toBe("오감별");
+    expect(savedBody?.notice).toBe("※ 사정상 수업의 순서는 바뀔 수 있습니다.");
     expect(savedBody?.weeks).toHaveLength(12);
     expect((savedBody?.weeks as LessonWeek[])[0]).toMatchObject({
       week: 1,
@@ -151,7 +173,7 @@ describe("LessonPlans", () => {
     fireEvent.click(screen.getByRole("button", { name: /전체 복사/ }));
 
     expect(
-      screen.getByRole("heading", { name: "전체 복사본 등록" })
+      screen.getByRole("heading", { name: "전체 복사본 등록" }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("1주차 수업명")).toHaveValue("봄 1주 수업");
     fireEvent.change(screen.getByLabelText("계획서 학기"), {
@@ -171,14 +193,14 @@ describe("LessonPlans", () => {
           createdName = JSON.parse(String(options.body)).name;
           return jsonResponse(
             { ...location, id: "location-2", name: createdName },
-            201
+            201,
           );
         }
         if (url === "/api/lesson-locations?includeInactive=true")
           return jsonResponse([location]);
         if (url === "/api/lesson-plans") return jsonResponse([]);
         return jsonResponse([]);
-      }
+      },
     );
     renderScreen();
 
@@ -190,7 +212,7 @@ describe("LessonPlans", () => {
 
     await waitFor(() => expect(createdName).toBe("마포 배움터"));
     expect(
-      await screen.findByText("‘마포 배움터’ 장소를 등록했습니다.")
+      await screen.findByText("‘마포 배움터’ 장소를 등록했습니다."),
     ).toBeInTheDocument();
   });
 
@@ -218,7 +240,7 @@ describe("LessonPlans", () => {
     fireEvent.click(screen.getByRole("button", { name: /주차 가져오기/ }));
     await screen.findByRole("heading", { name: "특정 주차 가져오기" });
     fireEvent.click(
-      await screen.findByRole("checkbox", { name: /1주차 여름 1주 수업/ })
+      await screen.findByRole("checkbox", { name: /1주차 여름 1주 수업/ }),
     );
     fireEvent.change(screen.getByLabelText("1주차 대상 주차"), {
       target: { value: "2" },
@@ -226,11 +248,11 @@ describe("LessonPlans", () => {
     fireEvent.click(screen.getByRole("button", { name: "선택 주차 가져오기" }));
 
     expect(window.confirm).toHaveBeenCalledWith(
-      "2주차의 기존 내용을 덮어쓸까요?"
+      "2주차의 기존 내용을 덮어쓸까요?",
     );
     expect(screen.getByLabelText("2주차 수업명")).toHaveValue("여름 1주 수업");
     expect(screen.getByLabelText("2주차 수업내용")).toHaveValue(
-      "여름 1주 내용"
+      "여름 1주 내용",
     );
     expect(screen.getByLabelText("1주차 수업명")).toHaveValue("봄 1주 수업");
   });

@@ -4,6 +4,7 @@ import {
   FiCheck,
   FiClipboard,
   FiCopy,
+  FiDownload,
   FiEdit2,
   FiMapPin,
   FiPlus,
@@ -18,6 +19,7 @@ import LessonLocationDialog from "../components/LessonLocationDialog";
 import {
   LessonLocation,
   LessonPlan,
+  LessonPlanDocumentFields,
   LessonPlanInput,
   LessonPlanSummary,
   LessonTerm,
@@ -38,7 +40,7 @@ const TERM_LABELS = TERMS.reduce<Record<LessonTerm, string>>(
     summer: "여름학기",
     fall: "가을학기",
     winter: "겨울학기",
-  }
+  },
 );
 
 const createEmptyWeeks = (): LessonWeek[] =>
@@ -47,6 +49,23 @@ const createEmptyWeeks = (): LessonWeek[] =>
     className: "",
     content: "",
   }));
+
+const DEFAULT_NOTICE = "※ 사정상 수업의 순서는 바뀔 수 있습니다.";
+
+const createEmptyDocumentFields = (programName: string, term: LessonTerm) => ({
+  documentTitle: `${programName} 강의계획서 - ${TERM_LABELS[term]}`,
+  courseName: programName,
+  instructorName: "",
+  representativeProfile: "",
+  courseIntroduction: "",
+  audience: "",
+  capacity: "",
+  scheduleDetails: "",
+  tuition: "",
+  materialFee: "",
+  openLecture: "",
+  notice: DEFAULT_NOTICE,
+});
 
 interface EditorDraft extends LessonPlanInput {
   id?: string;
@@ -85,33 +104,33 @@ function LessonPlans() {
 
   const locationsQuery = useQuery<LessonLocation[]>(
     "lessonLocations",
-    api.lessonLocations
+    api.lessonLocations,
   );
   const plansQuery = useQuery<LessonPlanSummary[]>("lessonPlans", () =>
-    api.lessonPlans()
+    api.lessonPlans(),
   );
   const locations = useMemo(
     () => locationsQuery.data || [],
-    [locationsQuery.data]
+    [locationsQuery.data],
   );
   const plans = useMemo(() => plansQuery.data || [], [plansQuery.data]);
   const activeLocations = useMemo(
     () => locations.filter((location) => location.active),
-    [locations]
+    [locations],
   );
   const programNames = useMemo(
     () =>
       Array.from(new Set(plans.map((plan) => plan.programName))).sort((a, b) =>
-        a.localeCompare(b, "ko")
+        a.localeCompare(b, "ko"),
       ),
-    [plans]
+    [plans],
   );
   const years = useMemo(
     () =>
       Array.from(
-        new Set([currentYear, ...plans.map((plan) => plan.year)])
+        new Set([currentYear, ...plans.map((plan) => plan.year)]),
       ).sort((left, right) => right - left),
-    [currentYear, plans]
+    [currentYear, plans],
   );
   const filteredPlans = useMemo(
     () =>
@@ -120,9 +139,9 @@ function LessonPlans() {
           plan.year === year &&
           (!term || plan.term === term) &&
           (!locationId || plan.locationId === locationId) &&
-          (!programName || plan.programName === programName)
+          (!programName || plan.programName === programName),
       ),
-    [locationId, plans, programName, term, year]
+    [locationId, plans, programName, term, year],
   );
 
   useEffect(() => {
@@ -137,9 +156,9 @@ function LessonPlans() {
     const timeout = window.setTimeout(
       () =>
         setNotice((current) =>
-          current?.id === notice.id ? undefined : current
+          current?.id === notice.id ? undefined : current,
         ),
-      notice.type === "success" ? 3000 : 5000
+      notice.type === "success" ? 3000 : 5000,
     );
     return () => window.clearTimeout(timeout);
   }, [notice]);
@@ -147,12 +166,12 @@ function LessonPlans() {
   const detailQuery = useQuery<LessonPlan>(
     ["lessonPlan", selectedPlanId],
     () => api.lessonPlan(selectedPlanId),
-    { enabled: Boolean(selectedPlanId) && !editor }
+    { enabled: Boolean(selectedPlanId) && !editor },
   );
   const copySourceQuery = useQuery<LessonPlan>(
     ["lessonPlan", copySourceId],
     () => api.lessonPlan(copySourceId),
-    { enabled: copyDialogOpen && Boolean(copySourceId) }
+    { enabled: copyDialogOpen && Boolean(copySourceId) },
   );
 
   const showNotice = (message: string, type: Notice["type"] = "success") =>
@@ -166,6 +185,18 @@ function LessonPlans() {
         locationId: draft.locationId,
         programName: draft.programName,
         sectionName: draft.sectionName,
+        documentTitle: draft.documentTitle,
+        courseName: draft.courseName,
+        instructorName: draft.instructorName,
+        representativeProfile: draft.representativeProfile,
+        courseIntroduction: draft.courseIntroduction,
+        audience: draft.audience,
+        capacity: draft.capacity,
+        scheduleDetails: draft.scheduleDetails,
+        tuition: draft.tuition,
+        materialFee: draft.materialFee,
+        openLecture: draft.openLecture,
+        notice: draft.notice,
         weeks: draft.weeks,
       };
       return draft.id && draft.revision
@@ -193,19 +224,22 @@ function LessonPlans() {
           error instanceof Error
             ? error.message
             : "강의계획서를 저장하지 못했습니다.",
-          "error"
+          "error",
         ),
-    }
+    },
   );
 
   const startNew = () => {
+    const initialTerm = term || "spring";
+    const initialProgramName = programName || "오감별";
     setEditor({
       kind: "new",
       year,
-      term: term || "spring",
+      term: initialTerm,
       locationId: activeLocations[0]?.id || "",
-      programName: programName || "오감별",
+      programName: initialProgramName,
       sectionName: "",
+      ...createEmptyDocumentFields(initialProgramName, initialTerm),
       weeks: createEmptyWeeks(),
     });
   };
@@ -221,6 +255,18 @@ function LessonPlans() {
       locationId: detailQuery.data.locationId,
       programName: detailQuery.data.programName,
       sectionName: detailQuery.data.sectionName,
+      documentTitle: detailQuery.data.documentTitle,
+      courseName: detailQuery.data.courseName,
+      instructorName: detailQuery.data.instructorName,
+      representativeProfile: detailQuery.data.representativeProfile,
+      courseIntroduction: detailQuery.data.courseIntroduction,
+      audience: detailQuery.data.audience,
+      capacity: detailQuery.data.capacity,
+      scheduleDetails: detailQuery.data.scheduleDetails,
+      tuition: detailQuery.data.tuition,
+      materialFee: detailQuery.data.materialFee,
+      openLecture: detailQuery.data.openLecture,
+      notice: detailQuery.data.notice,
       weeks: detailQuery.data.weeks.map((week) => ({ ...week })),
     });
   };
@@ -234,6 +280,18 @@ function LessonPlans() {
       locationId: detailQuery.data.locationId,
       programName: detailQuery.data.programName,
       sectionName: detailQuery.data.sectionName,
+      documentTitle: detailQuery.data.documentTitle,
+      courseName: detailQuery.data.courseName,
+      instructorName: detailQuery.data.instructorName,
+      representativeProfile: detailQuery.data.representativeProfile,
+      courseIntroduction: detailQuery.data.courseIntroduction,
+      audience: detailQuery.data.audience,
+      capacity: detailQuery.data.capacity,
+      scheduleDetails: detailQuery.data.scheduleDetails,
+      tuition: detailQuery.data.tuition,
+      materialFee: detailQuery.data.materialFee,
+      openLecture: detailQuery.data.openLecture,
+      notice: detailQuery.data.notice,
       weeks: detailQuery.data.weeks.map((week) => ({ ...week })),
     });
   };
@@ -250,10 +308,19 @@ function LessonPlans() {
         ? {
             ...current,
             weeks: current.weeks.map((week) =>
-              week.week === weekNumber ? { ...week, ...changes } : week
+              week.week === weekNumber ? { ...week, ...changes } : week,
             ),
           }
-        : current
+        : current,
+    );
+  };
+
+  const updateDocumentField = (
+    field: keyof LessonPlanDocumentFields,
+    value: string,
+  ) => {
+    setEditor((current) =>
+      current ? { ...current, [field]: value } : current,
     );
   };
 
@@ -267,7 +334,7 @@ function LessonPlans() {
     setWeekMappings((current) =>
       checked
         ? [...current, { sourceWeek, targetWeek: sourceWeek }]
-        : current.filter((mapping) => mapping.sourceWeek !== sourceWeek)
+        : current.filter((mapping) => mapping.sourceWeek !== sourceWeek),
     );
   };
 
@@ -290,16 +357,16 @@ function LessonPlans() {
       !window.confirm(
         `${overwritten
           .map((week) => `${week}주차`)
-          .join(", ")}의 기존 내용을 덮어쓸까요?`
+          .join(", ")}의 기존 내용을 덮어쓸까요?`,
       )
     ) {
       return;
     }
     const sourceWeeks = new Map(
-      copySourceQuery.data.weeks.map((week) => [week.week, week])
+      copySourceQuery.data.weeks.map((week) => [week.week, week]),
     );
     const mappingByTarget = new Map(
-      weekMappings.map((mapping) => [mapping.targetWeek, mapping.sourceWeek])
+      weekMappings.map((mapping) => [mapping.targetWeek, mapping.sourceWeek]),
     );
     setEditor({
       ...editor,
@@ -324,7 +391,7 @@ function LessonPlans() {
   const editorLocationOptions = useMemo(() => {
     if (!editor) return activeLocations;
     const current = locations.find(
-      (location) => location.id === editor.locationId
+      (location) => location.id === editor.locationId,
     );
     return current && !current.active
       ? [current, ...activeLocations]
@@ -492,15 +559,15 @@ function LessonPlans() {
                     {editor.kind === "edit"
                       ? "EDIT COURSE"
                       : editor.kind === "copy"
-                      ? "COPY COURSE"
-                      : "NEW COURSE"}
+                        ? "COPY COURSE"
+                        : "NEW COURSE"}
                   </span>
                   <h2>
                     {editor.kind === "edit"
                       ? "계획서 수정"
                       : editor.kind === "copy"
-                      ? "전체 복사본 등록"
-                      : "새 강의계획서"}
+                        ? "전체 복사본 등록"
+                        : "새 강의계획서"}
                   </h2>
                 </div>
                 <div
@@ -605,6 +672,156 @@ function LessonPlans() {
                 </button>
               </div>
 
+              <section
+                className="document-editor"
+                aria-labelledby="document-editor-title"
+              >
+                <div className="document-section-heading">
+                  <div>
+                    <span className="eyebrow">HWP DOCUMENT FIELDS</span>
+                    <h3 id="document-editor-title">문서 표기 정보</h3>
+                  </div>
+                  <span>DOCX에 그대로 표시됩니다.</span>
+                </div>
+                <div className="document-field-grid">
+                  <label className="document-field-wide">
+                    <span>문서 제목</span>
+                    <input
+                      aria-label="문서 제목"
+                      value={editor.documentTitle}
+                      onChange={(event) =>
+                        updateDocumentField("documentTitle", event.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    <span>강좌명</span>
+                    <input
+                      aria-label="문서 강좌명"
+                      value={editor.courseName}
+                      onChange={(event) =>
+                        updateDocumentField("courseName", event.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    <span>강사명</span>
+                    <input
+                      aria-label="문서 강사명"
+                      value={editor.instructorName}
+                      onChange={(event) =>
+                        updateDocumentField(
+                          "instructorName",
+                          event.target.value,
+                        )
+                      }
+                    />
+                  </label>
+                  <label>
+                    <span>대표 프로필</span>
+                    <input
+                      aria-label="대표 프로필"
+                      value={editor.representativeProfile}
+                      onChange={(event) =>
+                        updateDocumentField(
+                          "representativeProfile",
+                          event.target.value,
+                        )
+                      }
+                    />
+                  </label>
+                  <label>
+                    <span>강의 대상</span>
+                    <input
+                      aria-label="강의 대상"
+                      value={editor.audience}
+                      onChange={(event) =>
+                        updateDocumentField("audience", event.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    <span>정원</span>
+                    <input
+                      aria-label="정원"
+                      value={editor.capacity}
+                      onChange={(event) =>
+                        updateDocumentField("capacity", event.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    <span>교육비</span>
+                    <input
+                      aria-label="교육비"
+                      value={editor.tuition}
+                      onChange={(event) =>
+                        updateDocumentField("tuition", event.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    <span>교재비</span>
+                    <input
+                      aria-label="교재비"
+                      value={editor.materialFee}
+                      onChange={(event) =>
+                        updateDocumentField("materialFee", event.target.value)
+                      }
+                    />
+                  </label>
+                  <label className="document-field-wide">
+                    <span>강좌 소개</span>
+                    <textarea
+                      aria-label="강좌 소개"
+                      rows={3}
+                      value={editor.courseIntroduction}
+                      onChange={(event) =>
+                        updateDocumentField(
+                          "courseIntroduction",
+                          event.target.value,
+                        )
+                      }
+                    />
+                  </label>
+                  <label className="document-field-wide">
+                    <span>세부 연령·개월 및 강의 일정</span>
+                    <textarea
+                      aria-label="세부 연령 및 강의 일정"
+                      rows={3}
+                      value={editor.scheduleDetails}
+                      onChange={(event) =>
+                        updateDocumentField(
+                          "scheduleDetails",
+                          event.target.value,
+                        )
+                      }
+                    />
+                  </label>
+                  <label className="document-field-wide">
+                    <span>공개강좌</span>
+                    <textarea
+                      aria-label="공개강좌"
+                      rows={2}
+                      value={editor.openLecture}
+                      onChange={(event) =>
+                        updateDocumentField("openLecture", event.target.value)
+                      }
+                    />
+                  </label>
+                  <label className="document-field-wide">
+                    <span>하단 안내문</span>
+                    <input
+                      aria-label="하단 안내문"
+                      value={editor.notice}
+                      onChange={(event) =>
+                        updateDocumentField("notice", event.target.value)
+                      }
+                    />
+                  </label>
+                </div>
+              </section>
+
               <div className="week-grid week-grid-header" aria-hidden="true">
                 <span>주차</span>
                 <span>수업명</span>
@@ -685,6 +902,13 @@ function LessonPlans() {
                   </p>
                 </div>
                 <div className="heading-actions">
+                  <a
+                    className="button secondary"
+                    href={api.lessonPlanDocxUrl(selectedDetail.id)}
+                    download
+                  >
+                    <FiDownload /> DOCX 다운로드
+                  </a>
                   <button
                     className="button secondary"
                     type="button"
@@ -710,6 +934,45 @@ function LessonPlans() {
                   <span className="inactive-note">사용 중지된 장소</span>
                 ) : null}
               </div>
+              <section
+                className="document-preview"
+                aria-labelledby="document-preview-title"
+              >
+                <h3 id="document-preview-title">
+                  {selectedDetail.documentTitle || "강의계획서"}
+                </h3>
+                <div className="document-preview-grid">
+                  <b>강좌명</b>
+                  <span>{selectedDetail.courseName || "미작성"}</span>
+                  <b>강사명</b>
+                  <span>{selectedDetail.instructorName || "미작성"}</span>
+                  <b>대표 프로필</b>
+                  <span>
+                    {selectedDetail.representativeProfile || "미작성"}
+                  </span>
+                  <b>강좌 소개</b>
+                  <span className="preview-span-5">
+                    {selectedDetail.courseIntroduction || "미작성"}
+                  </span>
+                  <b>강의 대상</b>
+                  <span>{selectedDetail.audience || "미작성"}</span>
+                  <b>정원</b>
+                  <span>{selectedDetail.capacity || "미작성"}</span>
+                  <b>세부 연령·일정</b>
+                  <span>{selectedDetail.scheduleDetails || "미작성"}</span>
+                  <b>교육비</b>
+                  <span>{selectedDetail.tuition || "미작성"}</span>
+                  <b>교재비</b>
+                  <span>{selectedDetail.materialFee || "미작성"}</span>
+                  <b>공개강좌</b>
+                  <span className="preview-span-5">
+                    {selectedDetail.openLecture || "미작성"}
+                  </span>
+                </div>
+                {selectedDetail.notice ? (
+                  <p className="document-notice">{selectedDetail.notice}</p>
+                ) : null}
+              </section>
               <div className="week-grid week-grid-header" aria-hidden="true">
                 <span>주차</span>
                 <span>수업명</span>
@@ -820,7 +1083,7 @@ function LessonPlans() {
             <div className="copy-week-list">
               {copySourceQuery.data?.weeks.map((week) => {
                 const mapping = weekMappings.find(
-                  (item) => item.sourceWeek === week.week
+                  (item) => item.sourceWeek === week.week,
                 );
                 return (
                   <div
@@ -850,8 +1113,8 @@ function LessonPlans() {
                                   ...item,
                                   targetWeek: Number(event.target.value),
                                 }
-                              : item
-                          )
+                              : item,
+                          ),
                         )
                       }
                     >

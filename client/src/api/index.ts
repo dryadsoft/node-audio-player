@@ -33,13 +33,13 @@ export const api = {
   playlist: ({ queryKey }: { queryKey: readonly unknown[] }) => {
     const [, directory] = queryKey;
     return request<LibraryResponse>(
-      `/api/playlist?dir=${encodeURIComponent(String(directory || ""))}`
+      `/api/playlist?dir=${encodeURIComponent(String(directory || ""))}`,
     );
   },
   search: ({ queryKey }: { queryKey: readonly unknown[] }) => {
     const [, keyword] = queryKey;
     return request<string[]>(
-      `/api/search?keyword=${encodeURIComponent(String(keyword || ""))}`
+      `/api/search?keyword=${encodeURIComponent(String(keyword || ""))}`,
     );
   },
   playlists: () => request<SavedPlaylist[]>("/api/playlists"),
@@ -115,11 +115,13 @@ export const api = {
     if (programName) params.set("programName", programName);
     const query = params.toString();
     return request<LessonPlanSummary[]>(
-      `/api/lesson-plans${query ? `?${query}` : ""}`
+      `/api/lesson-plans${query ? `?${query}` : ""}`,
     );
   },
   lessonPlan: (id: string) =>
     request<LessonPlan>(`/api/lesson-plans/${encodeURIComponent(id)}`),
+  lessonPlanDocxUrl: (id: string) =>
+    `/api/lesson-plans/${encodeURIComponent(id)}/docx`,
   createLessonPlan: (input: LessonPlanInput) =>
     request<LessonPlan>("/api/lesson-plans", {
       method: "POST",

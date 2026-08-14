@@ -62,11 +62,27 @@ export interface LessonPlanSummary {
   updatedAt: string;
 }
 
-export interface LessonPlan extends LessonPlanSummary {
+export interface LessonPlanDocumentFields {
+  documentTitle: string;
+  courseName: string;
+  instructorName: string;
+  representativeProfile: string;
+  courseIntroduction: string;
+  audience: string;
+  capacity: string;
+  scheduleDetails: string;
+  tuition: string;
+  materialFee: string;
+  openLecture: string;
+  notice: string;
+}
+
+export interface LessonPlan
+  extends LessonPlanSummary, LessonPlanDocumentFields {
   weeks: LessonWeek[];
 }
 
-export interface LessonPlanInput {
+export interface LessonPlanInput extends LessonPlanDocumentFields {
   year: number;
   term: LessonTerm;
   locationId: string;
