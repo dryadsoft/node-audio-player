@@ -201,6 +201,51 @@ pm2 restart nmp --update-env
 pm2 save
 ```
 
+### PM2 재부팅 자동 복구
+
+`pm2 save`는 프로세스 목록만 저장한다. 부팅 시 목록을 복원하려면 systemd
+서비스도 설치하고 활성화해야 한다. 빈 PM2 목록으로 기존 dump를 덮어쓰지 않도록
+설치 전에 `nmp`가 저장되어 있는지 확인한다.
+
+Mac의 저장소 루트에서 서비스 파일을 전송한다.
+
+```sh
+scp ops/systemd/pm2-pi.service pi@raspberrypi.local:/tmp/
+```
+
+Pi에서 기존 dump를 백업하고 서비스를 설치한다. 아래 Node와 PM2 경로는 서비스
+파일의 값과 일치해야 한다.
+
+```sh
+BACKUP_DIR="/home/pi/backups/pm2-startup-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$BACKUP_DIR"
+cp -a /home/pi/.pm2/dump.pm2 "$BACKUP_DIR/dump.pm2"
+
+grep -q '"name":"nmp"' /home/pi/.pm2/dump.pm2
+test -x /home/pi/.nvm/versions/node/v22.23.2/bin/node
+test -x /home/pi/.config/yarn/global/node_modules/pm2/bin/pm2
+
+sudo systemd-analyze verify /tmp/pm2-pi.service
+pm2 kill || true
+sudo install -m 0644 /tmp/pm2-pi.service /etc/systemd/system/pm2-pi.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now pm2-pi
+```
+
+복원이 완료된 뒤에만 현재 온라인 목록을 다시 저장한다.
+
+```sh
+sudo systemctl is-enabled pm2-pi
+sudo systemctl is-active pm2-pi
+pm2 status
+pm2 describe nmp
+curl -fsS 'http://127.0.0.1:4000/api/playlist?dir=' >/dev/null
+pm2 save
+```
+
+Node 또는 PM2 설치 경로가 바뀌면 `ops/systemd/pm2-pi.service`의 `PATH`,
+`ExecStart`, `ExecReload`, `ExecStop`을 함께 갱신하고 서비스를 다시 설치한다.
+
 과거 HWP에서 생성한 manifest를 적용할 때는 HWP 원본을 Pi로 복사하지 않는다.
 검토한 `lesson-plans-manifest.json`만 `server-nestjs/data/imports/`에 전송하고,
 위 백업과 테스트가 성공한 뒤 다음 순서로 적용한다.
@@ -559,6 +604,21 @@ cp -a /home/pi/backups/node-audio-player-security-YYYYMMDD-HHMMSS/server-nestjs/
 cp -a /home/pi/backups/node-audio-player-security-YYYYMMDD-HHMMSS/server-nestjs/dist \
   /home/pi/workspace/node-audio-player/server-nestjs/
 pm2 restart nmp
+```
+
+### PM2 자동 복구 롤백
+
+자동 복구 서비스가 시작되지 않으면 반복 재부팅하지 않는다. 먼저 서비스를
+비활성화하고 백업한 dump로 기존 PM2 실행 방식을 복원한다.
+
+```sh
+sudo systemctl disable --now pm2-pi
+sudo cp -a /home/pi/backups/pm2-startup-YYYYMMDD-HHMMSS/dump.pm2 \
+  /home/pi/.pm2/dump.pm2
+sudo systemctl daemon-reload
+PM2_HOME=/home/pi/.pm2 \
+PATH=/home/pi/.nvm/versions/node/v22.23.2/bin:/home/pi/.yarn-global/bin:/usr/local/bin:/usr/bin:/bin \
+  /home/pi/.config/yarn/global/node_modules/pm2/bin/pm2 resurrect
 ```
 
 ### Nginx 기존 사이트 복원

@@ -1,0 +1,22 @@
+[Unit]
+Description=PM2 process manager for pi
+Documentation=https://pm2.keymetrics.io/
+After=network.target
+
+[Service]
+Type=forking
+User=pi
+LimitNOFILE=infinity
+LimitNPROC=infinity
+LimitCORE=infinity
+Environment=PATH=/home/pi/.nvm/versions/node/v22.23.2/bin:/home/pi/.yarn-global/bin:/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+Environment=PM2_HOME=/home/pi/.pm2
+PIDFile=/home/pi/.pm2/pm2.pid
+Restart=on-failure
+
+ExecStart=/home/pi/.config/yarn/global/node_modules/pm2/bin/pm2 resurrect
+ExecReload=/home/pi/.config/yarn/global/node_modules/pm2/bin/pm2 reload all
+ExecStop=/home/pi/.config/yarn/global/node_modules/pm2/bin/pm2 kill
+
+[Install]
+WantedBy=multi-user.target
