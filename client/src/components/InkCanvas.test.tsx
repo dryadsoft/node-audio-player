@@ -1,7 +1,8 @@
 import "@testing-library/jest-dom";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
 import InkCanvas from "./InkCanvas";
-import { InkDocumentV1 } from "../types";
+import { InkDocument, InkDocumentV1 } from "../types";
 
 const emptyDocument: InkDocumentV1 = {
   version: 1,
@@ -11,15 +12,16 @@ const emptyDocument: InkDocumentV1 = {
 
 const pointerEvent = (
   type: string,
-  pointerType: "pen" | "touch",
+  pointerType: "pen" | "touch" | "mouse",
   clientX: number,
   clientY: number,
   pointerId = 1,
   pressure = 0.7,
   buttons = 1,
+  timeStamp?: number,
 ) => {
   const event = new Event(type, { bubbles: true, cancelable: true });
-  Object.defineProperties(event, {
+  const properties: PropertyDescriptorMap = {
     pointerType: { value: pointerType },
     pointerId: { value: pointerId },
     clientX: { value: clientX },
@@ -28,8 +30,23 @@ const pointerEvent = (
     buttons: { value: buttons },
     tiltX: { value: 2 },
     tiltY: { value: -1 },
-  });
+  };
+  if (timeStamp !== undefined) properties.timeStamp = { value: timeStamp };
+  Object.defineProperties(event, properties);
   return event;
+};
+
+const ControlledInkCanvas = ({ onChange }: { onChange: jest.Mock }) => {
+  const [document, setDocument] = useState<InkDocument>(emptyDocument);
+  return (
+    <InkCanvas
+      document={document}
+      onChange={(next) => {
+        onChange(next);
+        setDocument(next);
+      }}
+    />
+  );
 };
 
 let context: {
@@ -142,9 +159,9 @@ describe("InkCanvas", () => {
     expect(onChange.mock.calls[1][0].strokes).toHaveLength(2);
   });
 
-  it("records three reused-id Pencil strokes without pointer capture", () => {
+  it("records five reused-id Pencil strokes through controlled rerenders", () => {
     const onChange = jest.fn();
-    render(<InkCanvas document={emptyDocument} onChange={onChange} />);
+    render(<ControlledInkCanvas onChange={onChange} />);
     const canvas = screen.getByLabelText("Apple Pencil 필기 영역 1페이지");
     const setPointerCapture = jest.fn(() => {
       throw new DOMException("capture unavailable", "NotFoundError");
@@ -158,19 +175,37 @@ describe("InkCanvas", () => {
       releasePointerCapture,
     });
 
-    for (let index = 0; index < 3; index += 1) {
+    for (let index = 0; index < 5; index += 1) {
       fireEvent(
         canvas,
-        pointerEvent("pointerdown", "pen", 40 + index * 40, 60, 7),
+        pointerEvent(
+          "pointerdown",
+          "pen",
+          40 + index * 40,
+          60,
+          7,
+          0.7,
+          1,
+          index * 10 + 1,
+        ),
       );
       fireEvent(
         canvas,
-        pointerEvent("pointerup", "pen", 60 + index * 40, 80, 7),
+        pointerEvent(
+          "pointerup",
+          "pen",
+          60 + index * 40,
+          80,
+          7,
+          0,
+          0,
+          index * 10 + 2,
+        ),
       );
     }
 
-    expect(onChange).toHaveBeenCalledTimes(3);
-    expect(onChange.mock.calls[2][0].strokes).toHaveLength(3);
+    expect(onChange).toHaveBeenCalledTimes(5);
+    expect(onChange.mock.calls[4][0].strokes).toHaveLength(5);
     expect(setPointerCapture).not.toHaveBeenCalled();
     expect(releasePointerCapture).not.toHaveBeenCalled();
   });
@@ -228,18 +263,117 @@ describe("InkCanvas", () => {
     expect(onChange.mock.calls[0][0].strokes[0].points).toHaveLength(2);
   });
 
-  it("recovers a missing pointerup from a zero-pressure move", () => {
+  it("ignores a zero-pressure move and continues the current stroke", () => {
     const onChange = jest.fn();
     render(<InkCanvas document={emptyDocument} onChange={onChange} />);
     const canvas = screen.getByLabelText("Apple Pencil 필기 영역 1페이지");
 
-    fireEvent(canvas, pointerEvent("pointerdown", "pen", 40, 60, 6));
-    fireEvent(canvas, pointerEvent("pointermove", "pen", 80, 90, 6, 0, 0));
-    fireEvent(canvas, pointerEvent("pointerdown", "pen", 120, 130, 6));
-    fireEvent(window, pointerEvent("pointerup", "pen", 160, 170, 6));
+    fireEvent(
+      canvas,
+      pointerEvent("pointerdown", "pen", 40, 60, 6, 0.7, 1, 10),
+    );
+    fireEvent(
+      canvas,
+      pointerEvent("pointermove", "pen", 80, 90, 6, 0, 0, 11),
+    );
+    fireEvent(
+      canvas,
+      pointerEvent("pointermove", "pen", 120, 130, 6, 0.8, 1, 12),
+    );
+    fireEvent(
+      window,
+      pointerEvent("pointerup", "pen", 120, 130, 6, 0, 0, 13),
+    );
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0][0].strokes[0].points).toHaveLength(2);
+    expect(onChange.mock.calls[0][0].strokes[0].points[1][0]).toBe(0.3);
+  });
+
+  it("ignores delayed events from a previous reused pointerId stroke", () => {
+    const onChange = jest.fn();
+    render(<InkCanvas document={emptyDocument} onChange={onChange} />);
+    const canvas = screen.getByLabelText("Apple Pencil 필기 영역 1페이지");
+
+    fireEvent(
+      canvas,
+      pointerEvent("pointerdown", "pen", 40, 60, 7, 0.7, 1, 100),
+    );
+    fireEvent(
+      canvas,
+      pointerEvent("pointermove", "pen", 80, 90, 7, 0.7, 1, 110),
+    );
+    fireEvent(
+      canvas,
+      pointerEvent("pointerdown", "pen", 120, 130, 7, 0.7, 1, 200),
+    );
+    expect(onChange).toHaveBeenCalledTimes(1);
+
+    fireEvent(
+      window,
+      pointerEvent("pointermove", "pen", 90, 100, 7, 0, 0, 120),
+    );
+    fireEvent(
+      window,
+      pointerEvent("pointerup", "pen", 90, 100, 7, 0, 0, 130),
+    );
+    fireEvent(
+      window,
+      pointerEvent("pointercancel", "pen", 90, 100, 7, 0, 0, 140),
+    );
+    fireEvent(
+      window,
+      pointerEvent("pointerup", "mouse", 90, 100, 7, 0, 0, 205),
+    );
+    expect(onChange).toHaveBeenCalledTimes(1);
+
+    fireEvent(
+      window,
+      pointerEvent("pointermove", "pen", 160, 170, 7, 0.8, 1, 210),
+    );
+    fireEvent(
+      window,
+      pointerEvent("pointerup", "pen", 160, 170, 7, 0, 0, 220),
+    );
 
     expect(onChange).toHaveBeenCalledTimes(2);
     expect(onChange.mock.calls[1][0].strokes).toHaveLength(2);
+    expect(onChange.mock.calls[1][0].strokes[1].points).toHaveLength(2);
+  });
+
+  it("registers stable global Pencil listeners once across rerenders", () => {
+    const addEventListener = jest.spyOn(window, "addEventListener");
+    const removeEventListener = jest.spyOn(window, "removeEventListener");
+    const { rerender, unmount } = render(
+      <InkCanvas document={emptyDocument} onChange={jest.fn()} />,
+    );
+
+    for (let index = 0; index < 5; index += 1) {
+      rerender(
+        <InkCanvas
+          document={{ ...emptyDocument, strokes: [] }}
+          onChange={jest.fn()}
+        />,
+      );
+    }
+
+    const pointerAdds = addEventListener.mock.calls.filter(([type]) =>
+      ["pointermove", "pointerup", "pointercancel"].includes(type),
+    );
+    expect(pointerAdds.map(([type]) => type)).toEqual([
+      "pointermove",
+      "pointerup",
+      "pointercancel",
+    ]);
+
+    unmount();
+    const pointerRemoves = removeEventListener.mock.calls.filter(([type]) =>
+      ["pointermove", "pointerup", "pointercancel"].includes(type),
+    );
+    expect(pointerRemoves).toHaveLength(3);
+    pointerAdds.forEach(([type, listener]) => {
+      expect(pointerRemoves).toContainEqual([type, listener]);
+    });
   });
 
   it("redraws an active Pencil stroke during a parent rerender", () => {
