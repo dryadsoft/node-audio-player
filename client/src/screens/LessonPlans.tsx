@@ -18,6 +18,7 @@ import AppNavigation from "../components/AppNavigation";
 import LessonLocationDialog from "../components/LessonLocationDialog";
 import {
   LessonLocation,
+  LessonCurriculumSummary,
   LessonPlan,
   LessonPlanDocumentFields,
   LessonPlanInput,
@@ -109,11 +110,19 @@ function LessonPlans() {
   const plansQuery = useQuery<LessonPlanSummary[]>("lessonPlans", () =>
     api.lessonPlans(),
   );
+  const curriculaQuery = useQuery<LessonCurriculumSummary[]>(
+    "lessonCurricula",
+    () => api.lessonCurricula(),
+  );
   const locations = useMemo(
     () => locationsQuery.data || [],
     [locationsQuery.data],
   );
   const plans = useMemo(() => plansQuery.data || [], [plansQuery.data]);
+  const curricula = useMemo(
+    () => curriculaQuery.data || [],
+    [curriculaQuery.data],
+  );
   const activeLocations = useMemo(
     () => locations.filter((location) => location.active),
     [locations],
@@ -185,6 +194,7 @@ function LessonPlans() {
         locationId: draft.locationId,
         programName: draft.programName,
         sectionName: draft.sectionName,
+        curriculumId: draft.curriculumId,
         documentTitle: draft.documentTitle,
         courseName: draft.courseName,
         instructorName: draft.instructorName,
@@ -239,6 +249,7 @@ function LessonPlans() {
       locationId: activeLocations[0]?.id || "",
       programName: initialProgramName,
       sectionName: "",
+      curriculumId: null,
       ...createEmptyDocumentFields(initialProgramName, initialTerm),
       weeks: createEmptyWeeks(),
     });
@@ -255,6 +266,7 @@ function LessonPlans() {
       locationId: detailQuery.data.locationId,
       programName: detailQuery.data.programName,
       sectionName: detailQuery.data.sectionName,
+      curriculumId: detailQuery.data.curriculumId,
       documentTitle: detailQuery.data.documentTitle,
       courseName: detailQuery.data.courseName,
       instructorName: detailQuery.data.instructorName,
@@ -280,6 +292,7 @@ function LessonPlans() {
       locationId: detailQuery.data.locationId,
       programName: detailQuery.data.programName,
       sectionName: detailQuery.data.sectionName,
+      curriculumId: null,
       documentTitle: detailQuery.data.documentTitle,
       courseName: detailQuery.data.courseName,
       instructorName: detailQuery.data.instructorName,
@@ -400,6 +413,56 @@ function LessonPlans() {
 
   const selectedDetail = detailQuery.data;
   const editorCompleted = editor ? completedWeekCount(editor.weeks) : 0;
+  const editorCurricula = editor
+    ? curricula.filter(
+        (curriculum) =>
+          curriculum.year === editor.year &&
+          curriculum.term === editor.term &&
+          curriculum.programName.normalize("NFC").trim().toLocaleLowerCase("ko") ===
+            editor.programName.normalize("NFC").trim().toLocaleLowerCase("ko"),
+      )
+    : [];
+
+  const selectCurriculum = async (curriculumId: string) => {
+    if (!editor) return;
+    if (!curriculumId) {
+      setEditor({ ...editor, curriculumId: null });
+      return;
+    }
+    try {
+      const curriculum = await queryClient.fetchQuery(
+        ["lessonCurriculum", curriculumId],
+        () => api.lessonCurriculum(curriculumId),
+      );
+      setEditor((current) => {
+        if (!current) return current;
+        const sameIdentity =
+          current.year === curriculum.year &&
+          current.term === curriculum.term &&
+          current.programName.normalize("NFC").trim().toLocaleLowerCase("ko") ===
+            curriculum.programName
+              .normalize("NFC")
+              .trim()
+              .toLocaleLowerCase("ko");
+        if (!sameIdentity) return current;
+        return {
+          ...current,
+          curriculumId,
+          weeks: curriculum.weeks.map((week) => ({
+            week: week.week,
+            className: week.className,
+            content: week.content,
+          })),
+        };
+      });
+    } catch (error) {
+      showNotice(
+        error instanceof Error
+          ? error.message
+          : "공통 수업노트를 불러오지 못했습니다.",
+      );
+    }
+  };
 
   return (
     <main className="app-shell lesson-shell">
@@ -596,9 +659,15 @@ function LessonPlans() {
                     min="2000"
                     max="9999"
                     value={editor.year}
-                    onChange={(event) =>
-                      setEditor({ ...editor, year: Number(event.target.value) })
-                    }
+                    onChange={(event) => {
+                      const nextYear = Number(event.target.value);
+                      setEditor({
+                        ...editor,
+                        year: nextYear,
+                        curriculumId:
+                          nextYear === editor.year ? editor.curriculumId : null,
+                      });
+                    }}
                   />
                 </label>
                 <label>
@@ -606,12 +675,15 @@ function LessonPlans() {
                   <select
                     aria-label="계획서 학기"
                     value={editor.term}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const nextTerm = event.target.value as LessonTerm;
                       setEditor({
                         ...editor,
-                        term: event.target.value as LessonTerm,
-                      })
-                    }
+                        term: nextTerm,
+                        curriculumId:
+                          nextTerm === editor.term ? editor.curriculumId : null,
+                      });
+                    }}
                   >
                     {TERMS.map((item) => (
                       <option key={item.value} value={item.value}>
@@ -644,9 +716,17 @@ function LessonPlans() {
                   <input
                     aria-label="계획서 프로그램명"
                     value={editor.programName}
-                    onChange={(event) =>
-                      setEditor({ ...editor, programName: event.target.value })
-                    }
+                    onChange={(event) => {
+                      const programName = event.target.value;
+                      setEditor({
+                        ...editor,
+                        programName,
+                        curriculumId:
+                          programName === editor.programName
+                            ? editor.curriculumId
+                            : null,
+                      });
+                    }}
                     placeholder="예: 오감별"
                     required
                   />
@@ -661,6 +741,22 @@ function LessonPlans() {
                     }
                     placeholder="예: 월요일, 8주"
                   />
+                </label>
+                <label>
+                  <span>공통 수업노트</span>
+                  <select
+                    aria-label="계획서 공통 수업노트"
+                    value={editor.curriculumId || ""}
+                    onChange={(event) => selectCurriculum(event.target.value)}
+                  >
+                    <option value="">연결하지 않음</option>
+                    {editorCurricula.map((curriculum) => (
+                      <option key={curriculum.id} value={curriculum.id}>
+                        {curriculum.year}년 {TERM_LABELS[curriculum.term]} ·{" "}
+                        {curriculum.programName}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <button
                   className="button secondary copy-weeks-button"
@@ -822,6 +918,13 @@ function LessonPlans() {
                 </div>
               </section>
 
+              {editor.curriculumId ? (
+                <p className="copy-guidance shared-curriculum-guidance">
+                  수업명과 수업내용은 연결된 공통 수업노트에서 관리합니다.
+                  필기·진행 플랜·사용 교구는 강의계획서와 DOCX에 포함되지 않습니다.
+                </p>
+              ) : null}
+
               <div className="week-grid week-grid-header" aria-hidden="true">
                 <span>주차</span>
                 <span>수업명</span>
@@ -845,6 +948,7 @@ function LessonPlans() {
                           })
                         }
                         placeholder="수업명을 입력하세요"
+                        disabled={Boolean(editor.curriculumId)}
                       />
                     </label>
                     <label>
@@ -857,6 +961,7 @@ function LessonPlans() {
                         }
                         placeholder="수업내용을 입력하세요"
                         rows={2}
+                        disabled={Boolean(editor.curriculumId)}
                       />
                     </label>
                   </div>
@@ -932,6 +1037,11 @@ function LessonPlans() {
                 </span>
                 {!selectedDetail.locationActive ? (
                   <span className="inactive-note">사용 중지된 장소</span>
+                ) : null}
+                {selectedDetail.curriculumId ? (
+                  <a className="shared-note-link" href="/lesson-notes">
+                    공통 수업노트 연결됨
+                  </a>
                 ) : null}
               </div>
               <section

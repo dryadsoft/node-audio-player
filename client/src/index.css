@@ -1950,3 +1950,388 @@ textarea {
     width: 100%;
   }
 }
+
+.notes-hero {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.curriculum-create {
+  display: grid;
+  max-width: 1500px;
+  grid-template-columns: 120px 150px minmax(180px, 0.8fr) minmax(240px, 1.2fr) auto;
+  gap: 10px;
+  align-items: end;
+  margin: 0 auto 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(var(--panel-rgb), 0.92);
+}
+
+.curriculum-create label > span,
+.note-text-grid label > span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.curriculum-create input,
+.curriculum-create select,
+.note-text-grid input,
+.note-text-grid textarea {
+  width: 100%;
+}
+
+.curriculum-create-actions {
+  display: flex;
+  gap: 7px;
+}
+
+.form-error {
+  grid-column: 1 / -1;
+  color: var(--danger);
+  font-size: 0.76rem;
+}
+
+.notes-workspace {
+  display: grid;
+  max-width: 1500px;
+  min-height: 650px;
+  height: calc(100vh - 184px);
+  grid-template-columns: minmax(245px, 0.22fr) minmax(0, 0.78fr);
+  gap: 12px;
+  margin-inline: auto;
+}
+
+.curriculum-browser,
+.notebook-sheet {
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background: rgba(var(--panel-rgb), 0.94);
+  box-shadow: 0 22px 50px rgba(var(--shadow-rgb), 0.23);
+}
+
+.curriculum-browser {
+  overflow-y: auto;
+  padding: 14px;
+}
+
+.curriculum-card {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 8px;
+  padding: 12px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: var(--row);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.curriculum-card:hover,
+.curriculum-card.active {
+  border-color: rgba(var(--accent-rgb), 0.55);
+  background: var(--panel-soft);
+}
+
+.curriculum-card span,
+.curriculum-card small {
+  color: var(--muted);
+}
+
+.notebook-sheet {
+  overflow-y: auto;
+  padding: 18px;
+}
+
+.notebook-heading,
+.notebook-page-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.save-indicator {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.save-indicator.saved {
+  color: var(--success);
+}
+
+.save-indicator.error {
+  color: var(--danger);
+}
+
+.week-tabs {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(54px, 1fr));
+  gap: 6px;
+  margin: 16px 0;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.week-tabs button {
+  display: flex;
+  min-width: 54px;
+  min-height: 52px;
+  align-items: baseline;
+  justify-content: center;
+  gap: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--row);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.week-tabs button.filled::after {
+  width: 5px;
+  height: 5px;
+  align-self: center;
+  border-radius: 50%;
+  background: var(--success);
+  content: "";
+}
+
+.week-tabs button.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.week-tabs button b {
+  font-family: Georgia, serif;
+  font-size: 1.08rem;
+}
+
+.week-tabs button span {
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+.notebook-page {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(var(--canvas-deep-rgb), 0.34);
+}
+
+.notebook-page-heading > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.notebook-page-heading b {
+  color: var(--accent);
+  font-family: Georgia, serif;
+  font-size: 1.4rem;
+}
+
+.notebook-page-heading span {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.note-text-fields {
+  margin: 12px 0;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel);
+}
+
+.note-text-fields summary {
+  padding: 11px 13px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.note-text-fields summary span,
+.note-text-grid small {
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-weight: 600;
+}
+
+.note-text-grid {
+  display: grid;
+  grid-template-columns: 0.7fr 1.3fr 1fr 1fr;
+  gap: 10px;
+  padding: 0 13px 13px;
+}
+
+.ink-boundary-note,
+.ink-help {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.ink-boundary-note {
+  margin: 9px 0;
+  padding-left: 9px;
+  border-left: 3px solid var(--accent);
+}
+
+.ink-editor {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.ink-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  overflow-x: auto;
+  border-bottom: 1px solid #d8d8d8;
+  background: #f4f1e9;
+  color: #151817;
+}
+
+.ink-tool-group {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  padding-right: 8px;
+  border-right: 1px solid #d2cec4;
+}
+
+.ink-tool-group:last-child {
+  padding-right: 0;
+  border-right: 0;
+}
+
+.ink-toolbar button {
+  display: inline-flex;
+  min-width: 36px;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 9px;
+  border: 1px solid #cbc7bc;
+  border-radius: 8px;
+  background: #fff;
+  color: #202523;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.ink-toolbar button.active {
+  border-color: #a57938;
+  box-shadow: inset 0 0 0 1px #a57938;
+}
+
+.ink-toolbar .ink-color {
+  min-width: 36px;
+  padding: 0;
+}
+
+.ink-color::after {
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+
+.ink-history-tools {
+  margin-left: auto;
+}
+
+.ink-canvas {
+  display: block;
+  width: 100%;
+  min-height: 420px;
+  background:
+    radial-gradient(circle, #d9dfe5 1px, transparent 1.2px) 0 0 / 22px 22px,
+    #fff;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.ink-help {
+  padding: 7px 10px;
+  border-top: 1px solid #e1ded7;
+  background: #f8f6f1;
+  color: #666b68;
+}
+
+@media (max-width: 900px) {
+  .notes-hero {
+    grid-template-columns: auto 1fr;
+  }
+  .notes-hero > .button {
+    grid-column: 1 / -1;
+  }
+  .curriculum-create {
+    grid-template-columns: 1fr 1fr;
+  }
+  .curriculum-source,
+  .curriculum-create-actions {
+    grid-column: 1 / -1;
+  }
+  .notes-workspace {
+    display: block;
+    height: auto;
+  }
+  .curriculum-browser {
+    max-height: 240px;
+    margin-bottom: 12px;
+  }
+  .notebook-sheet {
+    min-height: 620px;
+  }
+  .note-text-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .ink-canvas {
+    min-height: 500px;
+  }
+}
+
+@media (max-width: 560px) {
+  .curriculum-create,
+  .note-text-grid {
+    grid-template-columns: 1fr;
+  }
+  .curriculum-source,
+  .curriculum-create-actions {
+    grid-column: auto;
+  }
+  .notebook-sheet {
+    padding: 10px;
+  }
+  .notebook-heading,
+  .notebook-page-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .ink-canvas {
+    min-height: 360px;
+  }
+}

@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { FiBookOpen, FiMoon, FiMusic, FiSun } from "react-icons/fi";
+import { FiBookOpen, FiEdit3, FiMoon, FiMusic, FiSun } from "react-icons/fi";
 import { useTheme } from "../context/ThemeContext";
 
 function AppNavigation() {
@@ -16,6 +16,10 @@ function AppNavigation() {
         <NavLink to="/lesson-plans">
           <FiBookOpen />
           강의계획서
+        </NavLink>
+        <NavLink to="/lesson-notes">
+          <FiEdit3 />
+          수업노트
         </NavLink>
       </div>
       <button

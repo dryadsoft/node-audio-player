@@ -8,7 +8,7 @@ import { mkdirSync } from 'fs';
 import { dirname, resolve } from 'path';
 import { loadSqlite, SqliteDatabase } from './sqlite.types';
 
-const MIGRATION_VERSION = 3;
+const MIGRATION_VERSION = 4;
 
 @Injectable()
 export class SqliteService implements OnModuleInit, OnModuleDestroy {
@@ -214,6 +214,45 @@ export class SqliteService implements OnModuleInit, OnModuleDestroy {
           ADD COLUMN notice TEXT NOT NULL DEFAULT '';
         ALTER TABLE lesson_plan_import_sources
           ADD COLUMN metadata_version INTEGER NOT NULL DEFAULT 1;
+      `);
+        } else if (version === 4) {
+          database.exec(`
+        CREATE TABLE lesson_curricula (
+          id TEXT PRIMARY KEY,
+          year INTEGER NOT NULL CHECK (year BETWEEN 2000 AND 9999),
+          term TEXT NOT NULL CHECK (
+            term IN ('spring', 'summer', 'fall', 'winter')
+          ),
+          program_name TEXT NOT NULL,
+          normalized_program_name TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE (year, term, normalized_program_name)
+        );
+
+        CREATE TABLE lesson_curriculum_weeks (
+          curriculum_id TEXT NOT NULL,
+          week INTEGER NOT NULL CHECK (week BETWEEN 1 AND 12),
+          class_name TEXT NOT NULL DEFAULT '',
+          content TEXT NOT NULL DEFAULT '',
+          lesson_plan TEXT NOT NULL DEFAULT '',
+          materials TEXT NOT NULL DEFAULT '',
+          ink_json TEXT NOT NULL DEFAULT '{"version":1,"aspectRatio":1.3333333333333333,"strokes":[]}',
+          revision INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0),
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY (curriculum_id, week),
+          FOREIGN KEY (curriculum_id) REFERENCES lesson_curricula(id)
+            ON UPDATE CASCADE ON DELETE CASCADE
+        );
+
+        ALTER TABLE lesson_plans
+          ADD COLUMN curriculum_id TEXT REFERENCES lesson_curricula(id)
+            ON UPDATE CASCADE ON DELETE RESTRICT;
+
+        CREATE INDEX lesson_curricula_filter_idx
+          ON lesson_curricula(year, term, normalized_program_name);
+        CREATE INDEX lesson_plans_curriculum_idx
+          ON lesson_plans(curriculum_id);
       `);
         }
         database

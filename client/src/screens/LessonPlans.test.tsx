@@ -30,6 +30,7 @@ const plan = (
   locationId: location.id,
   locationName: location.name,
   locationActive: true,
+  curriculumId: null,
   programName: "오감별",
   sectionName: "월요일",
   documentTitle: "오감별 강의계획서 - 봄학기",
@@ -182,6 +183,62 @@ describe("LessonPlans", () => {
     expect(screen.getByLabelText("계획서 학기")).toHaveValue("summer");
     expect(screen.getByLabelText("계획서 프로그램명")).toHaveValue("오감별");
     expect(screen.getByLabelText("계획서 수업 구분")).toHaveValue("월요일");
+  });
+
+  it("links a matching common note and previews its shared weeks", async () => {
+    const curriculum = {
+      id: "curriculum-1",
+      year: currentYear,
+      term: "spring",
+      programName: "오감별",
+      completedWeeks: 1,
+      linkedPlanCount: 0,
+      createdAt: "2026-09-03T00:00:00.000Z",
+      updatedAt: "2026-09-03T00:00:00.000Z",
+      weeks: weeks("공통").map((item) => ({
+        ...item,
+        lessonPlan: "",
+        materials: "",
+        hasInk: false,
+        revision: 1,
+        updatedAt: "2026-09-03T00:00:00.000Z",
+      })),
+    };
+    (window.fetch as jest.Mock).mockImplementation((input: RequestInfo) => {
+      const url = String(input);
+      if (url === "/api/lesson-locations?includeInactive=true") {
+        return jsonResponse([location]);
+      }
+      if (url === "/api/lesson-plans") {
+        return jsonResponse([{ ...plan(), weeks: undefined }]);
+      }
+      if (url === "/api/lesson-plans/plan-1") return jsonResponse(plan());
+      if (url === "/api/lesson-curricula") {
+        const { weeks: _weeks, ...curriculumSummary } = curriculum;
+        return jsonResponse([curriculumSummary]);
+      }
+      if (url === "/api/lesson-curricula/curriculum-1") {
+        return jsonResponse(curriculum);
+      }
+      return jsonResponse([]);
+    });
+    renderScreen();
+
+    await screen.findByRole("heading", { name: "봄학기 · 서초 문화센터" });
+    fireEvent.click(screen.getByRole("button", { name: /수정/ }));
+    fireEvent.change(screen.getByLabelText("계획서 공통 수업노트"), {
+      target: { value: "curriculum-1" },
+    });
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("1주차 수업명")).toHaveValue(
+        "공통 1주 수업",
+      ),
+    );
+    expect(screen.getByLabelText("1주차 수업명")).toBeDisabled();
+    expect(
+      screen.getByText(/수업명과 수업내용은 연결된 공통 수업노트에서 관리/),
+    ).toBeInTheDocument();
   });
 
   it("registers a reusable lesson location", async () => {

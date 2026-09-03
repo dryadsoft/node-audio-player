@@ -218,4 +218,100 @@ describe('AppController (e2e)', () => {
       })
       .expect(409);
   });
+
+  it('/api/lesson-curricula shares one weekly note across locations', async () => {
+    const firstLocation = await request(app.getHttpServer())
+      .post('/api/lesson-locations')
+      .send({ name: '서초 문화센터' })
+      .expect(201);
+    const secondLocation = await request(app.getHttpServer())
+      .post('/api/lesson-locations')
+      .send({ name: '마포 문화센터' })
+      .expect(201);
+    const weeks = Array.from({ length: 12 }, (_, index) => ({
+      week: index + 1,
+      className: `${index + 1}주 수업`,
+      content: `${index + 1}주 내용`,
+    }));
+    const source = await request(app.getHttpServer())
+      .post('/api/lesson-plans')
+      .send({
+        year: 2026,
+        term: 'fall',
+        locationId: firstLocation.body.id,
+        programName: '오감별',
+        sectionName: '',
+        weeks,
+      })
+      .expect(201);
+    const curriculum = await request(app.getHttpServer())
+      .post('/api/lesson-curricula')
+      .send({
+        year: 2026,
+        term: 'fall',
+        programName: '오감별',
+        sourcePlanId: source.body.id,
+      })
+      .expect(201);
+    expect(curriculum.body.weeks).toHaveLength(12);
+
+    await request(app.getHttpServer())
+      .put(`/api/lesson-curricula/${curriculum.body.id}/weeks/1`)
+      .send({
+        className: '가을 열매 놀이',
+        content: '열매의 모양과 소리를 탐색합니다.',
+        lessonPlan: '인사 후 열매 탐색',
+        materials: '도토리, 바구니',
+        inkDocument: {
+          version: 1,
+          aspectRatio: 4 / 3,
+          strokes: [
+            {
+              id: 'stroke-1',
+              color: '#1d4ed8',
+              width: 4,
+              points: [[0.1, 0.2, 0.7, 1, 0, 0]],
+            },
+          ],
+        },
+        expectedRevision: 1,
+      })
+      .expect(200)
+      .expect((response) => {
+        expect(response.body).toMatchObject({
+          className: '가을 열매 놀이',
+          lessonPlan: '인사 후 열매 탐색',
+          materials: '도토리, 바구니',
+          hasInk: true,
+          revision: 2,
+        });
+      });
+
+    const linked = await request(app.getHttpServer())
+      .post('/api/lesson-plans')
+      .send({
+        year: 2026,
+        term: 'fall',
+        locationId: secondLocation.body.id,
+        programName: '오감별',
+        sectionName: '',
+        curriculumId: curriculum.body.id,
+        weeks,
+      })
+      .expect(201);
+    expect(linked.body.weeks[0]).toEqual({
+      week: 1,
+      className: '가을 열매 놀이',
+      content: '열매의 모양과 소리를 탐색합니다.',
+    });
+
+    const listed = await request(app.getHttpServer())
+      .get('/api/lesson-curricula')
+      .query({ year: 2026, term: 'fall', programName: '오감별' })
+      .expect(200);
+    expect(listed.body[0]).toMatchObject({
+      id: curriculum.body.id,
+      linkedPlanCount: 1,
+    });
+  });
 });

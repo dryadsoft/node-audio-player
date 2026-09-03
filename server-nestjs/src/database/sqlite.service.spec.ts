@@ -95,7 +95,7 @@ describe('SqliteService migrations', () => {
         sqlite.database
           .prepare('SELECT MAX(version) AS version FROM schema_migrations')
           .get(),
-      ).toEqual({ version: 3 });
+      ).toEqual({ version: 4 });
       expect(
         sqlite.database
           .prepare(
@@ -113,6 +113,16 @@ describe('SqliteService migrations', () => {
           expect.objectContaining({ table: 'lesson_plans' }),
         ]),
       );
+      expect(
+        sqlite.database
+          .prepare("SELECT curriculum_id FROM lesson_plans WHERE id = 'plan-1'")
+          .get(),
+      ).toEqual({ curriculum_id: null });
+      expect(
+        sqlite.database
+          .prepare('SELECT COUNT(*) AS count FROM lesson_curricula')
+          .get(),
+      ).toEqual({ count: 0 });
       expect(sqlite.integrityCheck()).toBe(true);
     } finally {
       sqlite.onModuleDestroy();

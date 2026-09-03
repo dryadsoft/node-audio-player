@@ -40,6 +40,7 @@ export interface LessonPlanSummary {
   locationActive: boolean;
   programName: string;
   sectionName: string;
+  curriculumId: string | null;
   completedWeeks: number;
   status: 'draft' | 'complete';
   revision: number;

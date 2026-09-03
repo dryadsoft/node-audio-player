@@ -1,6 +1,9 @@
 import {
   LibraryResponse,
   LessonLocation,
+  LessonCurriculum,
+  LessonCurriculumSummary,
+  LessonCurriculumWeek,
   LessonPlan,
   LessonPlanInput,
   LessonPlanSummary,
@@ -97,6 +100,61 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(changes),
     }),
+  lessonCurricula: ({
+    year,
+    term,
+    programName,
+  }: {
+    year?: number;
+    term?: LessonTerm;
+    programName?: string;
+  } = {}) => {
+    const params = new URLSearchParams();
+    if (year) params.set("year", String(year));
+    if (term) params.set("term", term);
+    if (programName) params.set("programName", programName);
+    const query = params.toString();
+    return request<LessonCurriculumSummary[]>(
+      `/api/lesson-curricula${query ? `?${query}` : ""}`,
+    );
+  },
+  lessonCurriculum: (id: string) =>
+    request<LessonCurriculum>(
+      `/api/lesson-curricula/${encodeURIComponent(id)}`,
+    ),
+  lessonCurriculumWeek: (id: string, week: number) =>
+    request<LessonCurriculumWeek>(
+      `/api/lesson-curricula/${encodeURIComponent(id)}/weeks/${week}`,
+    ),
+  createLessonCurriculum: (input: {
+    year: number;
+    term: LessonTerm;
+    programName: string;
+    sourcePlanId?: string;
+  }) =>
+    request<LessonCurriculum>("/api/lesson-curricula", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  updateLessonCurriculumWeek: ({
+    id,
+    week,
+    ...input
+  }: LessonCurriculumWeek & { id: string }) =>
+    request<LessonCurriculumWeek>(
+      `/api/lesson-curricula/${encodeURIComponent(id)}/weeks/${week}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          className: input.className,
+          content: input.content,
+          lessonPlan: input.lessonPlan,
+          materials: input.materials,
+          inkDocument: input.inkDocument,
+          expectedRevision: input.revision,
+        }),
+      },
+    ),
   lessonPlans: ({
     year,
     term,

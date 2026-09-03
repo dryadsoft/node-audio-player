@@ -4,6 +4,7 @@ import { tmpdir } from 'os';
 import { resolve } from 'path';
 import { SqliteService } from '../database/sqlite.service';
 import { LessonLocationService } from './lesson-location.service';
+import { LessonCurriculumService } from './lesson-curriculum.service';
 import { LessonWeek } from './lesson-plan.interface';
 import { LessonPlanService } from './lesson-plan.service';
 
@@ -26,7 +27,7 @@ describe('LessonPlanService', () => {
     sqlite = new SqliteService();
     sqlite.onModuleInit();
     locations = new LessonLocationService(sqlite);
-    plans = new LessonPlanService(sqlite);
+    plans = new LessonPlanService(sqlite, new LessonCurriculumService(sqlite));
   });
 
   afterEach(async () => {

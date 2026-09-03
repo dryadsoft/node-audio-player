@@ -46,6 +46,51 @@ export interface LessonWeek {
   content: string;
 }
 
+export type InkPoint = [number, number, number, number, number?, number?];
+
+export interface InkStroke {
+  id: string;
+  color: "#111827" | "#1d4ed8" | "#dc2626";
+  width: 2 | 4 | 7;
+  points: InkPoint[];
+}
+
+export interface InkDocumentV1 {
+  version: 1;
+  aspectRatio: number;
+  strokes: InkStroke[];
+}
+
+export interface LessonCurriculumWeekSummary {
+  week: number;
+  className: string;
+  content: string;
+  lessonPlan: string;
+  materials: string;
+  hasInk: boolean;
+  revision: number;
+  updatedAt: string;
+}
+
+export interface LessonCurriculumWeek extends LessonCurriculumWeekSummary {
+  inkDocument: InkDocumentV1;
+}
+
+export interface LessonCurriculumSummary {
+  id: string;
+  year: number;
+  term: LessonTerm;
+  programName: string;
+  completedWeeks: number;
+  linkedPlanCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LessonCurriculum extends LessonCurriculumSummary {
+  weeks: LessonCurriculumWeekSummary[];
+}
+
 export interface LessonPlanSummary {
   id: string;
   year: number;
@@ -55,6 +100,7 @@ export interface LessonPlanSummary {
   locationActive: boolean;
   programName: string;
   sectionName: string;
+  curriculumId: string | null;
   completedWeeks: number;
   status: "draft" | "complete";
   revision: number;
@@ -88,5 +134,6 @@ export interface LessonPlanInput extends LessonPlanDocumentFields {
   locationId: string;
   programName: string;
   sectionName: string;
+  curriculumId: string | null;
   weeks: LessonWeek[];
 }

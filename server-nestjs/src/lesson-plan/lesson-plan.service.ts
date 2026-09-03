@@ -7,6 +7,7 @@ import {
 import { randomUUID } from 'crypto';
 import { SqliteDatabase } from '../database/sqlite.types';
 import { SqliteService } from '../database/sqlite.service';
+import { LessonCurriculumService } from './lesson-curriculum.service';
 import {
   LESSON_TERMS,
   LessonPlanDocumentFields,
@@ -25,6 +26,7 @@ interface PlanRow {
   location_active: number;
   program_name: string;
   section_name: string;
+  curriculum_id: string | null;
   document_title: string;
   course_name: string;
   instructor_name: string;
@@ -60,6 +62,7 @@ interface PlanInput {
   locationId?: unknown;
   programName?: unknown;
   sectionName?: unknown;
+  curriculumId?: unknown;
   documentTitle?: unknown;
   courseName?: unknown;
   instructorName?: unknown;
@@ -86,7 +89,10 @@ const DEFAULT_NOTICE = '※ 사정상 수업의 순서는 바뀔 수 있습니�
 
 @Injectable()
 export class LessonPlanService {
-  constructor(private readonly sqlite: SqliteService) {}
+  constructor(
+    private readonly sqlite: SqliteService,
+    private readonly curricula: LessonCurriculumService,
+  ) {}
 
   list(filters: {
     year?: unknown;
@@ -139,10 +145,14 @@ export class LessonPlanService {
     const row = this.findPlan(this.sqlite.database, id);
     const weeks = this.sqlite.database
       .prepare(
-        `SELECT week, class_name, content
-         FROM lesson_weeks WHERE plan_id = ? ORDER BY week ASC`,
+        row.curriculum_id
+          ? `SELECT week, class_name, content
+             FROM lesson_curriculum_weeks
+             WHERE curriculum_id = ? ORDER BY week ASC`
+          : `SELECT week, class_name, content
+             FROM lesson_weeks WHERE plan_id = ? ORDER BY week ASC`,
       )
-      .all(id) as WeekRow[];
+      .all(row.curriculum_id || id) as WeekRow[];
     return {
       ...this.toSummary(row),
       ...this.toDocumentFields(row),
@@ -160,6 +170,12 @@ export class LessonPlanService {
     const locationId = this.validateLocationId(input.locationId);
     const programName = this.validateProgramName(input.programName);
     const sectionName = this.validateSectionName(input.sectionName);
+    const curriculumId = this.validateCurriculumId(
+      input.curriculumId,
+      year,
+      term,
+      programName,
+    );
     const documentFields = this.validateDocumentFields(input, {
       documentTitle: `${programName} 강의계획서 - ${TERM_LABELS[term]}`,
       courseName: programName,
@@ -190,12 +206,12 @@ export class LessonPlanService {
       database
         .prepare(
           `INSERT INTO lesson_plans
-           (id, year, term, location_id, program_name, section_name,
+           (id, year, term, location_id, program_name, section_name, curriculum_id,
             document_title, course_name, instructor_name,
             representative_profile, course_introduction, audience, capacity,
             schedule_details, tuition, material_fee, open_lecture, notice,
             revision, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                    1, ?, ?)`,
         )
         .run(
@@ -205,6 +221,7 @@ export class LessonPlanService {
           locationId,
           programName,
           sectionName,
+          curriculumId,
           ...this.documentFieldValues(documentFields),
           now,
           now,
@@ -228,6 +245,14 @@ export class LessonPlanService {
 
     this.sqlite.transaction((database) => {
       const current = this.findPlan(database, id);
+      const curriculumId = this.validateCurriculumId(
+        input.curriculumId === undefined
+          ? current.curriculum_id
+          : input.curriculumId,
+        year,
+        term,
+        programName,
+      );
       const documentFields = this.validateDocumentFields(
         input,
         this.toDocumentFields(current),
@@ -255,7 +280,7 @@ export class LessonPlanService {
         .prepare(
           `UPDATE lesson_plans
            SET year = ?, term = ?, location_id = ?,
-               program_name = ?, section_name = ?,
+               program_name = ?, section_name = ?, curriculum_id = ?,
                document_title = ?, course_name = ?, instructor_name = ?,
                representative_profile = ?, course_introduction = ?,
                audience = ?, capacity = ?, schedule_details = ?,
@@ -269,6 +294,7 @@ export class LessonPlanService {
           locationId,
           programName,
           sectionName,
+          curriculumId,
           ...this.documentFieldValues(documentFields),
           new Date().toISOString(),
           id,
@@ -287,7 +313,7 @@ export class LessonPlanService {
 
   private summarySelect() {
     return `SELECT p.id, p.year, p.term, p.location_id,
-      p.program_name, p.section_name,
+      p.program_name, p.section_name, p.curriculum_id,
       p.document_title, p.course_name, p.instructor_name,
       p.representative_profile, p.course_introduction, p.audience,
       p.capacity, p.schedule_details, p.tuition, p.material_fee,
@@ -295,11 +321,16 @@ export class LessonPlanService {
       l.name AS location_name, l.active AS location_active,
       p.revision, p.created_at, p.updated_at,
       COALESCE(SUM(CASE
-        WHEN TRIM(w.class_name) <> '' AND TRIM(w.content) <> '' THEN 1
+        WHEN TRIM(CASE WHEN p.curriculum_id IS NULL
+          THEN w.class_name ELSE cw.class_name END) <> ''
+          AND TRIM(CASE WHEN p.curriculum_id IS NULL
+          THEN w.content ELSE cw.content END) <> '' THEN 1
         ELSE 0 END), 0) AS completed_weeks
       FROM lesson_plans p
       JOIN lesson_locations l ON l.id = p.location_id
-      LEFT JOIN lesson_weeks w ON w.plan_id = p.id`;
+      LEFT JOIN lesson_weeks w ON w.plan_id = p.id
+      LEFT JOIN lesson_curriculum_weeks cw
+        ON cw.curriculum_id = p.curriculum_id AND cw.week = w.week`;
   }
 
   private findPlan(database: SqliteDatabase, id: string): PlanRow {
@@ -408,6 +439,20 @@ export class LessonPlanService {
       throw new BadRequestException('프로그램명을 입력하세요.');
     }
     return programName;
+  }
+
+  private validateCurriculumId(
+    value: unknown,
+    year: number,
+    term: LessonTerm,
+    programName: string,
+  ): string | null {
+    if (value === undefined || value === null || value === '') return null;
+    if (typeof value !== 'string') {
+      throw new BadRequestException('공통 수업노트 선택이 올바르지 않습니다.');
+    }
+    this.curricula.assertMatches(value, year, term, programName);
+    return value;
   }
 
   private validateSectionName(value: unknown) {
@@ -554,6 +599,7 @@ export class LessonPlanService {
       locationActive: Boolean(row.location_active),
       programName: row.program_name,
       sectionName: row.section_name,
+      curriculumId: row.curriculum_id,
       completedWeeks,
       status: completedWeeks === 12 ? 'complete' : 'draft',
       revision: row.revision,
