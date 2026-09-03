@@ -426,6 +426,75 @@ describe("InkCanvas", () => {
     });
   });
 
+  it("blocks native touchmove in the ink viewport with a stable active listener", () => {
+    const addEventListener = jest.spyOn(
+      HTMLElement.prototype,
+      "addEventListener",
+    );
+    const removeEventListener = jest.spyOn(
+      HTMLElement.prototype,
+      "removeEventListener",
+    );
+    const { rerender, unmount } = render(
+      <InkCanvas document={emptyDocument} onChange={jest.fn()} />,
+    );
+    const viewport = document.querySelector(
+      ".ink-scroll-viewport",
+    ) as HTMLDivElement;
+    const addTargets = addEventListener.mock
+      .instances as unknown as EventTarget[];
+
+    const touchMoveAdds = addEventListener.mock.calls
+      .map((call, index) => ({ call, target: addTargets[index] }))
+      .filter(
+        ({ call, target }) => call[0] === "touchmove" && target === viewport,
+      );
+    expect(touchMoveAdds).toHaveLength(1);
+    expect(touchMoveAdds[0].call[2]).toEqual({ passive: false });
+
+    const touchMove = new Event("touchmove", {
+      bubbles: true,
+      cancelable: true,
+    });
+    viewport.dispatchEvent(touchMove);
+    expect(touchMove.defaultPrevented).toBe(true);
+
+    const nonCancelableTouchMove = new Event("touchmove", {
+      bubbles: true,
+      cancelable: false,
+    });
+    const preventDefault = jest.spyOn(nonCancelableTouchMove, "preventDefault");
+    viewport.dispatchEvent(nonCancelableTouchMove);
+    expect(preventDefault).not.toHaveBeenCalled();
+
+    rerender(
+      <InkCanvas
+        document={{ ...emptyDocument, strokes: [] }}
+        onChange={jest.fn()}
+      />,
+    );
+    const touchMoveAddsAfterRerender = addEventListener.mock.calls
+      .map((call, index) => ({ call, target: addTargets[index] }))
+      .filter(
+        ({ call, target }) => call[0] === "touchmove" && target === viewport,
+      );
+    expect(touchMoveAddsAfterRerender).toHaveLength(1);
+
+    unmount();
+    const removeTargets = removeEventListener.mock
+      .instances as unknown as EventTarget[];
+    const touchMoveRemoves = removeEventListener.mock.calls
+      .map((call, index) => ({
+        call,
+        target: removeTargets[index],
+      }))
+      .filter(
+        ({ call, target }) => call[0] === "touchmove" && target === viewport,
+      );
+    expect(touchMoveRemoves).toHaveLength(1);
+    expect(touchMoveRemoves[0].call[1]).toBe(touchMoveAdds[0].call[1]);
+  });
+
   it("redraws an active Pencil stroke during a parent rerender", () => {
     const onChange = jest.fn();
     const { rerender } = render(

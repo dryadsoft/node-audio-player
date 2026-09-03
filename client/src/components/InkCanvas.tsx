@@ -256,6 +256,20 @@ function InkCanvas({ document: sourceDocument, onChange }: InkCanvasProps) {
   }, []);
 
   useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const preventCancelableTouchMove = (event: TouchEvent) => {
+      // WebKit Scribble can omit Pencil events unless native touch scrolling is blocked.
+      if (event.cancelable) event.preventDefault();
+    };
+    viewport.addEventListener("touchmove", preventCancelableTouchMove, {
+      passive: false,
+    });
+    return () =>
+      viewport.removeEventListener("touchmove", preventCancelableTouchMove);
+  }, []);
+
+  useEffect(() => {
     if (!fullscreen) return;
     const previousFocus = document.activeElement as HTMLElement | null;
     const closeOnEscape = (event: KeyboardEvent) => {
