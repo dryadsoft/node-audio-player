@@ -2406,12 +2406,24 @@ textarea {
   touch-action: none;
 }
 
-.ink-pages-layer {
-  width: min(100%, 980px);
-  box-sizing: border-box;
+.ink-scroll-content {
+  width: max-content;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+.ink-zoom-stage {
+  position: relative;
   margin-inline: auto;
+}
+
+.ink-pages-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
   padding: 18px;
-  zoom: var(--ink-zoom, 1);
+  transform-origin: top left;
 }
 
 .ink-page {

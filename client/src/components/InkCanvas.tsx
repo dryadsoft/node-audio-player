@@ -3,6 +3,7 @@ import {
   PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -32,6 +33,7 @@ type TouchPoint = { x: number; y: number };
 type ActiveStroke = {
   pointerId: number;
   page: number;
+  canvas: HTMLCanvasElement;
   stroke: InkStrokeV2;
 };
 
@@ -40,6 +42,7 @@ const MAX_PAGE_COUNT = 20;
 const PAGE_ADD_THRESHOLD = 0.85;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 3;
+const MAX_PAGES_WIDTH = 980;
 
 const clamp = (value: number) => Math.min(1, Math.max(0, value));
 const clampZoom = (value: number) =>
@@ -79,6 +82,8 @@ function InkCanvas({ document: sourceDocument, onChange }: InkCanvasProps) {
   );
   const canvasRefs = useRef(new Map<number, HTMLCanvasElement>());
   const viewportRef = useRef<HTMLDivElement>(null);
+  const zoomStageRef = useRef<HTMLDivElement>(null);
+  const pagesLayerRef = useRef<HTMLDivElement>(null);
   const fullscreenButtonRef = useRef<HTMLButtonElement>(null);
   const documentRef = useRef(ink);
   const activeStroke = useRef<ActiveStroke>();
@@ -87,12 +92,19 @@ function InkCanvas({ document: sourceDocument, onChange }: InkCanvasProps) {
   const history = useRef<InkDocumentV2[]>([]);
   const future = useRef<InkDocumentV2[]>([]);
   const zoomRef = useRef(1);
-  const zoomFrame = useRef<number>();
+  const zoomFocus = useRef<{
+    localX: number;
+    localY: number;
+    clientX: number;
+    clientY: number;
+  }>();
   const [tool, setTool] = useState<Tool>("pen");
   const [color, setColor] = useState<InkStrokeV2["color"]>("#111827");
   const [width, setWidth] = useState<InkStrokeV2["width"]>(4);
   const [zoom, setZoom] = useState(1);
   const [fullscreen, setFullscreen] = useState(false);
+  const [pagesWidth, setPagesWidth] = useState(MAX_PAGES_WIDTH);
+  const [pagesHeight, setPagesHeight] = useState(0);
 
   const drawStroke = useCallback(
     (
@@ -185,6 +197,39 @@ function InkCanvas({ document: sourceDocument, onChange }: InkCanvasProps) {
     return () => observer.disconnect();
   }, [ink, ink.pageCount, redrawAll]);
 
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const measure = () => {
+      const nextWidth = Math.min(MAX_PAGES_WIDTH, viewport.clientWidth);
+      if (nextWidth <= 0) return;
+      setPagesWidth((current) =>
+        current === nextWidth ? current : nextWidth,
+      );
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, []);
+
+  useLayoutEffect(() => {
+    const pagesLayer = pagesLayerRef.current;
+    if (!pagesLayer) return;
+    const measure = () => {
+      const nextHeight = pagesLayer.offsetHeight;
+      setPagesHeight((current) =>
+        current === nextHeight ? current : nextHeight,
+      );
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(pagesLayer);
+    return () => observer.disconnect();
+  }, [ink.pageCount, pagesWidth]);
+
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
@@ -210,12 +255,7 @@ function InkCanvas({ document: sourceDocument, onChange }: InkCanvasProps) {
   }, [fullscreen]);
 
   useEffect(
-    () => () => {
-      if (zoomFrame.current !== undefined) {
-        window.cancelAnimationFrame(zoomFrame.current);
-      }
-      document.body.classList.remove("ink-fullscreen-open");
-    },
+    () => () => document.body.classList.remove("ink-fullscreen-open"),
     [],
   );
 
@@ -293,8 +333,8 @@ function InkCanvas({ document: sourceDocument, onChange }: InkCanvasProps) {
     page: number,
   ) => {
     if (event.pointerType !== "pen" && event.pointerType !== "mouse") return;
-    if (activeStroke.current) return;
     event.preventDefault();
+    if (activeStroke.current) finalizeActiveStroke();
     releaseTouchPointers();
     if (tool === "eraser") {
       eraseAt(event, page);
@@ -308,7 +348,12 @@ function InkCanvas({ document: sourceDocument, onChange }: InkCanvasProps) {
       width,
       points: [pointFromEvent(event.nativeEvent, event.currentTarget)],
     };
-    activeStroke.current = { pointerId: event.pointerId, page, stroke };
+    activeStroke.current = {
+      pointerId: event.pointerId,
+      page,
+      canvas: event.currentTarget,
+      stroke,
+    };
     const context = event.currentTarget.getContext("2d");
     if (context) drawStroke(context, event.currentTarget, stroke);
   };
@@ -349,13 +394,17 @@ function InkCanvas({ document: sourceDocument, onChange }: InkCanvasProps) {
     }
   };
 
-  const finishStroke = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+  const finalizeActiveStroke = useCallback((pointerId?: number) => {
     const active = activeStroke.current;
-    if (!active || active.pointerId !== event.pointerId) return;
-    event.preventDefault();
+    if (
+      !active ||
+      (pointerId !== undefined && active.pointerId !== pointerId)
+    ) {
+      return;
+    }
     activeStroke.current = undefined;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
+    if (active.canvas.hasPointerCapture(active.pointerId)) {
+      active.canvas.releasePointerCapture(active.pointerId);
     }
     const current = documentRef.current;
     const shouldAddPage =
@@ -367,31 +416,56 @@ function InkCanvas({ document: sourceDocument, onChange }: InkCanvasProps) {
       pageCount: shouldAddPage ? current.pageCount + 1 : current.pageCount,
       strokes: [...current.strokes, active.stroke],
     });
+  }, [commit]);
+
+  const finishStroke = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    event.preventDefault();
+    finalizeActiveStroke(event.pointerId);
   };
+
+  useEffect(() => {
+    const finishOutsideCanvas = (event: PointerEvent) =>
+      finalizeActiveStroke(event.pointerId);
+    window.addEventListener("pointerup", finishOutsideCanvas);
+    window.addEventListener("pointercancel", finishOutsideCanvas);
+    return () => {
+      window.removeEventListener("pointerup", finishOutsideCanvas);
+      window.removeEventListener("pointercancel", finishOutsideCanvas);
+    };
+  }, [finalizeActiveStroke]);
 
   const applyZoom = (nextValue: number, centerX: number, centerY: number) => {
     const viewport = viewportRef.current;
-    if (!viewport) return;
+    const zoomStage = zoomStageRef.current;
+    if (!viewport || !zoomStage) return;
     const previousZoom = zoomRef.current;
     const nextZoom = clampZoom(nextValue);
     if (Math.abs(previousZoom - nextZoom) < 0.005) return;
-    const rect = viewport.getBoundingClientRect();
-    const focusX = centerX - rect.left;
-    const focusY = centerY - rect.top;
-    const contentX = (viewport.scrollLeft + focusX) / previousZoom;
-    const contentY = (viewport.scrollTop + focusY) / previousZoom;
+    const stageRect = zoomStage.getBoundingClientRect();
+    zoomFocus.current = {
+      localX: (centerX - stageRect.left) / previousZoom,
+      localY: (centerY - stageRect.top) / previousZoom,
+      clientX: centerX,
+      clientY: centerY,
+    };
     zoomRef.current = nextZoom;
     setZoom(nextZoom);
-    if (zoomFrame.current !== undefined) {
-      window.cancelAnimationFrame(zoomFrame.current);
-    }
-    zoomFrame.current = window.requestAnimationFrame(() => {
-      viewport.scrollLeft = contentX * nextZoom - focusX;
-      viewport.scrollTop = contentY * nextZoom - focusY;
-      redrawAll(documentRef.current, nextZoom);
-      zoomFrame.current = undefined;
-    });
   };
+
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    const zoomStage = zoomStageRef.current;
+    const focus = zoomFocus.current;
+    if (viewport && zoomStage && focus) {
+      const stageRect = zoomStage.getBoundingClientRect();
+      viewport.scrollBy(
+        stageRect.left + focus.localX * zoom - focus.clientX,
+        stageRect.top + focus.localY * zoom - focus.clientY,
+      );
+      zoomFocus.current = undefined;
+    }
+    redrawAll(documentRef.current, zoom);
+  }, [redrawAll, zoom]);
 
   const startTouch = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType !== "touch") return;
@@ -488,8 +562,14 @@ function InkCanvas({ document: sourceDocument, onChange }: InkCanvasProps) {
     applyZoom(1, rect.left + rect.width / 2, rect.top + rect.height / 2);
   };
 
+  const zoomStageStyle = {
+    width: `${pagesWidth * zoom}px`,
+    height: pagesHeight ? `${pagesHeight * zoom}px` : undefined,
+  } as CSSProperties;
+
   const pagesStyle = {
-    "--ink-zoom": String(zoom),
+    width: `${pagesWidth}px`,
+    transform: `scale(${zoom})`,
   } as CSSProperties;
 
   return (
@@ -590,27 +670,38 @@ function InkCanvas({ document: sourceDocument, onChange }: InkCanvasProps) {
         onContextMenu={(event) => event.preventDefault()}
         onDragStart={(event) => event.preventDefault()}
       >
-        <div className="ink-pages-layer" style={pagesStyle}>
-          {Array.from({ length: ink.pageCount }, (_, page) => (
-            <div className="ink-page" key={page}>
-              <span className="ink-page-number">{page + 1}</span>
-              <canvas
-                ref={(canvas) => {
-                  if (canvas) canvasRefs.current.set(page, canvas);
-                  else canvasRefs.current.delete(page);
-                }}
-                className="ink-canvas"
-                style={{ aspectRatio: String(ink.aspectRatio) }}
-                aria-label={`Apple Pencil 필기 영역 ${page + 1}페이지`}
-                tabIndex={0}
-                onPointerDown={(event) => startStroke(event, page)}
-                onPointerMove={(event) => moveStroke(event, page)}
-                onPointerUp={finishStroke}
-                onPointerCancel={finishStroke}
-                onLostPointerCapture={finishStroke}
-              />
+        <div className="ink-scroll-content">
+          <div
+            ref={zoomStageRef}
+            className="ink-zoom-stage"
+            style={zoomStageStyle}
+          >
+            <div
+              ref={pagesLayerRef}
+              className="ink-pages-layer"
+              style={pagesStyle}
+            >
+              {Array.from({ length: ink.pageCount }, (_, page) => (
+                <div className="ink-page" key={page}>
+                  <span className="ink-page-number">{page + 1}</span>
+                  <canvas
+                    ref={(canvas) => {
+                      if (canvas) canvasRefs.current.set(page, canvas);
+                      else canvasRefs.current.delete(page);
+                    }}
+                    className="ink-canvas"
+                    style={{ aspectRatio: String(ink.aspectRatio) }}
+                    aria-label={`Apple Pencil 필기 영역 ${page + 1}페이지`}
+                    tabIndex={0}
+                    onPointerDown={(event) => startStroke(event, page)}
+                    onPointerMove={(event) => moveStroke(event, page)}
+                    onPointerUp={finishStroke}
+                    onPointerCancel={finishStroke}
+                  />
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
       </div>
       <p className="ink-help">
