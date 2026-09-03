@@ -247,4 +247,184 @@ describe('LessonCurriculumService', () => {
       strokes: [],
     });
   });
+
+  it('replaces shared class content while preserving note-only fields', () => {
+    const sourceLocation = locations.create('교체 원본');
+    const linkedLocation = locations.create('연결 장소');
+    const source = plans.create({
+      year: 2028,
+      term: 'fall',
+      locationId: sourceLocation.id,
+      programName: '교체 수업',
+      sectionName: '',
+      weeks: weeks().map((week) => ({
+        ...week,
+        className: `새 ${week.className}`,
+        content: `새 ${week.content}`,
+      })),
+    });
+    const curriculum = curricula.create({
+      year: 2028,
+      term: 'fall',
+      programName: '교체 수업',
+    });
+    const linked = plans.create({
+      year: 2028,
+      term: 'fall',
+      locationId: linkedLocation.id,
+      programName: '교체 수업',
+      sectionName: '',
+      curriculumId: curriculum.id,
+      weeks: weeks(),
+    });
+    const noted = curricula.updateWeek(curriculum.id, 1, {
+      className: '이전 수업',
+      content: '이전 내용',
+      lessonPlan: '유지할 진행 플랜',
+      materials: '유지할 교구',
+      inkDocument: {
+        version: 2,
+        aspectRatio: 4 / 3,
+        pageCount: 2,
+        strokes: [
+          {
+            id: 'kept-stroke',
+            page: 0,
+            color: '#111827',
+            width: 4,
+            points: [[0.2, 0.3, 0.6, 1]],
+          },
+        ],
+      },
+      expectedRevision: 1,
+    });
+
+    expect(() =>
+      curricula.replaceWeeks(curriculum.id, {
+        sourcePlanId: linked.id,
+        expectedUpdatedAt: curricula.get(curriculum.id).updatedAt,
+      }),
+    ).toThrow(BadRequestException);
+
+    const replaced = curricula.replaceWeeks(curriculum.id, {
+      sourcePlanId: source.id,
+      expectedUpdatedAt: curricula.get(curriculum.id).updatedAt,
+    });
+    const firstWeek = curricula.getWeek(curriculum.id, 1);
+
+    expect(replaced.weeks).toHaveLength(12);
+    expect(firstWeek).toMatchObject({
+      className: '새 1주 수업',
+      content: '새 1주 내용',
+      lessonPlan: noted.lessonPlan,
+      materials: noted.materials,
+      revision: noted.revision + 1,
+    });
+    expect(firstWeek.inkDocument.strokes).toHaveLength(1);
+    expect(plans.get(linked.id).weeks[0]).toEqual({
+      week: 1,
+      className: '새 1주 수업',
+      content: '새 1주 내용',
+    });
+
+    const cleared = curricula.replaceWeeks(curriculum.id, {
+      sourcePlanId: null,
+      expectedUpdatedAt: replaced.updatedAt,
+    });
+    expect(cleared.weeks[0]).toMatchObject({ className: '', content: '' });
+    expect(curricula.getWeek(curriculum.id, 1)).toMatchObject({
+      lessonPlan: '유지할 진행 플랜',
+      materials: '유지할 교구',
+      hasInk: true,
+    });
+  });
+
+  it('rejects invalid replacement sources and stale replacements', () => {
+    const location = locations.create('잘못된 교체');
+    const curriculum = curricula.create({
+      year: 2029,
+      term: 'spring',
+      programName: '기준 수업',
+    });
+    const source = plans.create({
+      year: 2029,
+      term: 'spring',
+      locationId: location.id,
+      programName: '다른 수업',
+      sectionName: '',
+      weeks: weeks(),
+    });
+
+    expect(() =>
+      curricula.replaceWeeks(curriculum.id, {
+        sourcePlanId: source.id,
+        expectedUpdatedAt: curriculum.updatedAt,
+      }),
+    ).toThrow(BadRequestException);
+    expect(() =>
+      curricula.replaceWeeks(curriculum.id, {
+        sourcePlanId: null,
+        expectedUpdatedAt: 'stale',
+      }),
+    ).toThrow(ConflictException);
+    expect(curricula.getWeek(curriculum.id, 1)).toMatchObject({
+      className: '',
+      content: '',
+      revision: 1,
+    });
+  });
+
+  it('detaches linked plans with shared weeks before deleting a curriculum', () => {
+    const firstLocation = locations.create('삭제 연결 1');
+    const secondLocation = locations.create('삭제 연결 2');
+    const curriculum = curricula.create({
+      year: 2030,
+      term: 'winter',
+      programName: '삭제 수업',
+    });
+    const updated = curricula.updateWeek(curriculum.id, 1, {
+      className: '보존할 수업',
+      content: '보존할 내용',
+      lessonPlan: '삭제될 진행 플랜',
+      materials: '삭제될 교구',
+      inkDocument: {
+        version: 2,
+        aspectRatio: 4 / 3,
+        pageCount: 2,
+        strokes: [],
+      },
+      expectedRevision: 1,
+    });
+    const linkedPlans = [firstLocation, secondLocation].map((location) =>
+      plans.create({
+        year: 2030,
+        term: 'winter',
+        locationId: location.id,
+        programName: '삭제 수업',
+        sectionName: '',
+        curriculumId: curriculum.id,
+        weeks: weeks(),
+      }),
+    );
+
+    expect(() =>
+      curricula.delete(curriculum.id, { expectedUpdatedAt: 'stale' }),
+    ).toThrow(ConflictException);
+    const result = curricula.delete(curriculum.id, {
+      expectedUpdatedAt: curricula.get(curriculum.id).updatedAt,
+    });
+
+    expect(result).toEqual({ id: curriculum.id, detachedPlanCount: 2 });
+    for (const linked of linkedPlans) {
+      const detached = plans.get(linked.id);
+      expect(detached.curriculumId).toBeNull();
+      expect(detached.revision).toBe(linked.revision + 1);
+      expect(detached.weeks[0]).toEqual({
+        week: 1,
+        className: updated.className,
+        content: updated.content,
+      });
+    }
+    expect(() => curricula.get(curriculum.id)).toThrow();
+  });
 });

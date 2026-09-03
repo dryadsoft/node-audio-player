@@ -55,3 +55,8 @@ export interface LessonCurriculumSummary {
 export interface LessonCurriculumResponse extends LessonCurriculumSummary {
   weeks: LessonCurriculumWeekSummary[];
 }
+
+export interface DeleteLessonCurriculumResult {
+  id: string;
+  detachedPlanCount: number;
+}

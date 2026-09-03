@@ -318,5 +318,55 @@ describe('AppController (e2e)', () => {
       id: curriculum.body.id,
       linkedPlanCount: 1,
     });
+
+    const current = await request(app.getHttpServer())
+      .get(`/api/lesson-curricula/${curriculum.body.id}`)
+      .expect(200);
+    const replaced = await request(app.getHttpServer())
+      .put(`/api/lesson-curricula/${curriculum.body.id}/weeks`)
+      .send({
+        sourcePlanId: source.body.id,
+        expectedUpdatedAt: current.body.updatedAt,
+      })
+      .expect(200);
+    expect(replaced.body.weeks[0]).toMatchObject({
+      className: '1주 수업',
+      content: '1주 내용',
+    });
+    await request(app.getHttpServer())
+      .get(`/api/lesson-curricula/${curriculum.body.id}/weeks/1`)
+      .expect(200)
+      .expect((response) => {
+        expect(response.body).toMatchObject({
+          className: '1주 수업',
+          content: '1주 내용',
+          lessonPlan: '인사 후 열매 탐색',
+          materials: '도토리, 바구니',
+          hasInk: true,
+        });
+      });
+
+    const deleted = await request(app.getHttpServer())
+      .delete(`/api/lesson-curricula/${curriculum.body.id}`)
+      .send({ expectedUpdatedAt: replaced.body.updatedAt })
+      .expect(200);
+    expect(deleted.body).toEqual({
+      id: curriculum.body.id,
+      detachedPlanCount: 1,
+    });
+    await request(app.getHttpServer())
+      .get(`/api/lesson-curricula/${curriculum.body.id}`)
+      .expect(404);
+    await request(app.getHttpServer())
+      .get(`/api/lesson-plans/${linked.body.id}`)
+      .expect(200)
+      .expect((response) => {
+        expect(response.body.curriculumId).toBeNull();
+        expect(response.body.weeks[0]).toEqual({
+          week: 1,
+          className: '1주 수업',
+          content: '1주 내용',
+        });
+      });
   });
 });

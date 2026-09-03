@@ -9,6 +9,7 @@ import { Buffer } from 'buffer';
 import { SqliteService } from '../database/sqlite.service';
 import { LESSON_TERMS, LessonTerm } from './lesson-plan.interface';
 import {
+  DeleteLessonCurriculumResult,
   InkDocumentV2,
   InkPoint,
   InkStrokeV2,
@@ -49,6 +50,14 @@ interface CurriculumIdentityRow {
   program_name: string;
 }
 
+interface SourcePlanRow extends CurriculumIdentityRow {
+  curriculum_id: string | null;
+}
+
+interface LinkedPlanRow {
+  id: string;
+}
+
 interface CurriculumWeekRow {
   week: number;
   class_name: string;
@@ -74,6 +83,15 @@ interface WeekInput {
   materials?: unknown;
   inkDocument?: unknown;
   expectedRevision?: unknown;
+}
+
+interface ReplaceWeeksInput {
+  sourcePlanId?: unknown;
+  expectedUpdatedAt?: unknown;
+}
+
+interface DeleteInput {
+  expectedUpdatedAt?: unknown;
 }
 
 @Injectable()
@@ -257,7 +275,8 @@ export class LessonCurriculumService {
     const expectedRevision = this.validateRevision(input.expectedRevision);
 
     this.sqlite.transaction((database) => {
-      this.findCurriculum(curriculumId);
+      const curriculum = this.findCurriculum(curriculumId);
+      const now = this.nextUpdatedAt(curriculum.updated_at);
       const result = database
         .prepare(
           `UPDATE lesson_curriculum_weeks
@@ -271,7 +290,7 @@ export class LessonCurriculumService {
           lessonPlan,
           materials,
           JSON.stringify(inkDocument),
-          new Date().toISOString(),
+          now,
           curriculumId,
           week,
           expectedRevision,
@@ -283,9 +302,163 @@ export class LessonCurriculumService {
       }
       database
         .prepare('UPDATE lesson_curricula SET updated_at = ? WHERE id = ?')
-        .run(new Date().toISOString(), curriculumId);
+        .run(now, curriculumId);
     });
     return this.getWeek(curriculumId, week);
+  }
+
+  replaceWeeks(
+    curriculumId: string,
+    input: ReplaceWeeksInput,
+  ): LessonCurriculumResponse {
+    const sourcePlanId = this.validateOptionalId(input.sourcePlanId);
+    const expectedUpdatedAt = this.validateExpectedUpdatedAt(
+      input.expectedUpdatedAt,
+    );
+
+    this.sqlite.transaction((database) => {
+      const curriculum = this.findCurriculum(curriculumId);
+      this.assertCurrent(curriculum, expectedUpdatedAt);
+
+      let sourceWeeks: Array<{
+        week: number;
+        class_name: string;
+        content: string;
+      }> = [];
+      if (sourcePlanId) {
+        const source = database
+          .prepare(
+            `SELECT id, year, term, program_name, curriculum_id
+             FROM lesson_plans WHERE id = ?`,
+          )
+          .get(sourcePlanId) as SourcePlanRow | undefined;
+        if (!source) {
+          throw new NotFoundException('가져올 강의계획서가 존재하지 않습니다.');
+        }
+        if (source.curriculum_id) {
+          throw new BadRequestException(
+            '공통 수업노트에 연결되지 않은 계획서만 가져올 수 있습니다.',
+          );
+        }
+        if (
+          source.year !== curriculum.year ||
+          source.term !== curriculum.term ||
+          this.normalizedProgramName(source.program_name) !==
+            this.normalizedProgramName(curriculum.program_name)
+        ) {
+          throw new BadRequestException(
+            '같은 연도·학기·프로그램의 계획서만 가져올 수 있습니다.',
+          );
+        }
+        sourceWeeks = database
+          .prepare(
+            `SELECT week, class_name, content FROM lesson_weeks
+             WHERE plan_id = ? ORDER BY week`,
+          )
+          .all(sourcePlanId) as typeof sourceWeeks;
+        if (sourceWeeks.length !== 12) {
+          throw new BadRequestException(
+            '가져올 계획서의 12주 정보가 올바르지 않습니다.',
+          );
+        }
+      }
+
+      const sourceByWeek = new Map(
+        sourceWeeks.map((week) => [week.week, week]),
+      );
+      const now = this.nextUpdatedAt(curriculum.updated_at);
+      const update = database.prepare(
+        `UPDATE lesson_curriculum_weeks
+         SET class_name = ?, content = ?, revision = revision + 1,
+             updated_at = ?
+         WHERE curriculum_id = ? AND week = ?`,
+      );
+      for (let week = 1; week <= 12; week += 1) {
+        const source = sourceByWeek.get(week);
+        const result = update.run(
+          source?.class_name || '',
+          source?.content || '',
+          now,
+          curriculumId,
+          week,
+        );
+        if (result.changes !== 1) {
+          throw new ConflictException(
+            '공통 수업 12주 정보가 올바르지 않습니다.',
+          );
+        }
+      }
+      database
+        .prepare('UPDATE lesson_curricula SET updated_at = ? WHERE id = ?')
+        .run(now, curriculumId);
+    });
+
+    return this.get(curriculumId);
+  }
+
+  delete(
+    curriculumId: string,
+    input: DeleteInput,
+  ): DeleteLessonCurriculumResult {
+    const expectedUpdatedAt = this.validateExpectedUpdatedAt(
+      input.expectedUpdatedAt,
+    );
+    let detachedPlanCount = 0;
+
+    this.sqlite.transaction((database) => {
+      const curriculum = this.findCurriculum(curriculumId);
+      this.assertCurrent(curriculum, expectedUpdatedAt);
+      const weeks = database
+        .prepare(
+          `SELECT week, class_name, content
+           FROM lesson_curriculum_weeks
+           WHERE curriculum_id = ? ORDER BY week`,
+        )
+        .all(curriculumId) as Array<{
+        week: number;
+        class_name: string;
+        content: string;
+      }>;
+      if (weeks.length !== 12) {
+        throw new ConflictException('공통 수업 12주 정보가 올바르지 않습니다.');
+      }
+
+      const linkedPlans = database
+        .prepare('SELECT id FROM lesson_plans WHERE curriculum_id = ?')
+        .all(curriculumId) as LinkedPlanRow[];
+      const deleteWeeks = database.prepare(
+        'DELETE FROM lesson_weeks WHERE plan_id = ?',
+      );
+      const insertWeek = database.prepare(
+        `INSERT INTO lesson_weeks
+         (plan_id, week, class_name, content) VALUES (?, ?, ?, ?)`,
+      );
+      const detachPlan = database.prepare(
+        `UPDATE lesson_plans
+         SET curriculum_id = NULL, revision = revision + 1, updated_at = ?
+         WHERE id = ? AND curriculum_id = ?`,
+      );
+      const now = new Date().toISOString();
+      for (const plan of linkedPlans) {
+        deleteWeeks.run(plan.id);
+        for (const week of weeks) {
+          insertWeek.run(plan.id, week.week, week.class_name, week.content);
+        }
+        const detached = detachPlan.run(now, plan.id, curriculumId);
+        if (detached.changes !== 1) {
+          throw new ConflictException('연결된 계획서를 분리하지 못했습니다.');
+        }
+      }
+      const deleted = database
+        .prepare('DELETE FROM lesson_curricula WHERE id = ?')
+        .run(curriculumId);
+      if (deleted.changes !== 1) {
+        throw new ConflictException('공통 수업노트를 삭제하지 못했습니다.');
+      }
+      detachedPlanCount = linkedPlans.length;
+    });
+
+    return { id: curriculumId, detachedPlanCount };
   }
 
   assertMatches(
@@ -530,5 +703,28 @@ export class LessonCurriculumService {
       throw new BadRequestException('수정 버전이 올바르지 않습니다.');
     }
     return Number(value);
+  }
+
+  private validateExpectedUpdatedAt(value: unknown) {
+    if (typeof value !== 'string' || !value.trim()) {
+      throw new BadRequestException('공통 원본 수정 시점이 올바르지 않습니다.');
+    }
+    return value;
+  }
+
+  private assertCurrent(curriculum: CurriculumRow, expectedUpdatedAt: string) {
+    if (curriculum.updated_at !== expectedUpdatedAt) {
+      throw new ConflictException(
+        '다른 화면에서 먼저 수정했습니다. 최신 내용을 다시 불러오세요.',
+      );
+    }
+  }
+
+  private nextUpdatedAt(previous: string) {
+    const previousTime = Date.parse(previous);
+    const nextTime = Number.isFinite(previousTime)
+      ? Math.max(Date.now(), previousTime + 1)
+      : Date.now();
+    return new Date(nextTime).toISOString();
   }
 }

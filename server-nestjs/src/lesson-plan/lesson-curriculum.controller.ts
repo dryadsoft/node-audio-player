@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import { LessonCurriculumService } from './lesson-curriculum.service';
 
 @Controller('api/lesson-curricula')
@@ -32,6 +41,14 @@ export class LessonCurriculumController {
     return this.curricula.getWeek(curriculumId, week);
   }
 
+  @Put(':curriculumId/weeks')
+  replaceWeeks(
+    @Param('curriculumId') curriculumId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.curricula.replaceWeeks(curriculumId, body || {});
+  }
+
   @Put(':curriculumId/weeks/:week')
   updateWeek(
     @Param('curriculumId') curriculumId: string,
@@ -39,5 +56,13 @@ export class LessonCurriculumController {
     @Body() body: Record<string, unknown>,
   ) {
     return this.curricula.updateWeek(curriculumId, week, body || {});
+  }
+
+  @Delete(':curriculumId')
+  delete(
+    @Param('curriculumId') curriculumId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.curricula.delete(curriculumId, body || {});
   }
 }
