@@ -70,8 +70,31 @@ const jsonResponse = (payload: unknown, status = 200) =>
     json: () => Promise.resolve(payload),
   } as Response);
 
+const pencilEvent = (
+  type: string,
+  clientX: number,
+  clientY: number,
+  pressure: number,
+  buttons: number,
+) => {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperties(event, {
+    pointerType: { value: "pen" },
+    pointerId: { value: 7 },
+    clientX: { value: clientX },
+    clientY: { value: clientY },
+    pressure: { value: pressure },
+    buttons: { value: buttons },
+    timeStamp: { value: 0 },
+    tiltX: { value: 0 },
+    tiltY: { value: 0 },
+  });
+  return event;
+};
+
 describe("LessonNotes", () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     (loadLessonNoteDraft as jest.Mock).mockResolvedValue(undefined);
     (saveLessonNoteDraft as jest.Mock).mockResolvedValue(undefined);
     (clearLessonNoteDraft as jest.Mock).mockResolvedValue(undefined);
@@ -88,6 +111,19 @@ describe("LessonNotes", () => {
     jest
       .spyOn(HTMLCanvasElement.prototype, "getContext")
       .mockReturnValue(context);
+    jest
+      .spyOn(HTMLCanvasElement.prototype, "getBoundingClientRect")
+      .mockReturnValue({
+        x: 0,
+        y: 0,
+        top: 0,
+        left: 0,
+        right: 400,
+        bottom: 300,
+        width: 400,
+        height: 300,
+        toJSON: () => ({}),
+      });
   });
 
   afterEach(() => {
@@ -153,6 +189,54 @@ describe("LessonNotes", () => {
       strokes: [],
     });
     expect(await screen.findByText("저장 완료")).toBeInTheDocument();
+  });
+
+  it("passes ten rapid timestamp-zero Pencil strokes to the IndexedDB draft", async () => {
+    jest.spyOn(window, "fetch").mockImplementation((input) => {
+      const url = String(input);
+      if (url === "/api/lesson-curricula") return jsonResponse([summary]);
+      if (url === "/api/lesson-plans") return jsonResponse([]);
+      if (url === "/api/lesson-curricula/curriculum-1") {
+        return jsonResponse({ ...summary, weeks });
+      }
+      if (url === "/api/lesson-curricula/curriculum-1/weeks/1") {
+        return jsonResponse(week(1));
+      }
+      return jsonResponse([]);
+    });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <MemoryRouter initialEntries={["/lesson-notes"]}>
+            <LessonNotes />
+          </MemoryRouter>
+        </ThemeProvider>
+      </QueryClientProvider>,
+    );
+
+    await screen.findByRole("heading", { name: "가을학기 · 오감별" });
+    const canvas = await screen.findByLabelText("Apple Pencil 필기 영역 1페이지");
+    Object.assign(canvas, { releasePointerCapture: jest.fn() });
+
+    for (let index = 0; index < 10; index += 1) {
+      fireEvent(
+        canvas,
+        pencilEvent("pointerdown", 20 + index * 20, 40, 0.7, 1),
+      );
+      fireEvent(
+        window,
+        pencilEvent("pointerup", 30 + index * 20, 50, 0, 0),
+      );
+    }
+
+    await waitFor(() => {
+      const calls = (saveLessonNoteDraft as jest.Mock).mock.calls;
+      expect(calls[calls.length - 1]?.[0]).toBe("curriculum-1:1");
+      expect(calls[calls.length - 1]?.[1].inkDocument.strokes).toHaveLength(10);
+    });
   });
 
   it("replaces all shared class names and content from an independent plan", async () => {

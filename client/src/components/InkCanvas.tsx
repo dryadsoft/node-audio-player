@@ -33,10 +33,15 @@ type TouchPoint = { x: number; y: number };
 type ActiveStroke = {
   pointerId: number;
   pointerType: string;
-  startedAt: number;
+  contactEnded: boolean;
   page: number;
   canvas: HTMLCanvasElement;
   stroke: InkStrokeV2;
+};
+
+type PendingFinish = {
+  frameId: number;
+  stroke: ActiveStroke;
 };
 
 const DEFAULT_PAGE_COUNT = 2;
@@ -90,6 +95,7 @@ function InkCanvas({ document: sourceDocument, onChange }: InkCanvasProps) {
   const documentRef = useRef(ink);
   const onChangeRef = useRef(onChange);
   const activeStroke = useRef<ActiveStroke>();
+  const pendingFinish = useRef<PendingFinish>();
   const moveActiveStrokeRef = useRef<(event: PointerEvent) => void>(() => {});
   const finishActiveStrokeRef = useRef<(event: PointerEvent) => void>(
     () => {},
@@ -281,20 +287,20 @@ function InkCanvas({ document: sourceDocument, onChange }: InkCanvasProps) {
     [redrawAll],
   );
 
-  const pointFromEvent = (
-    event: PointerEvent,
-    canvas: HTMLCanvasElement,
-  ): InkPoint => {
-    const rect = canvas.getBoundingClientRect();
-    return [
-      clamp((event.clientX - rect.left) / rect.width),
-      clamp((event.clientY - rect.top) / rect.height),
-      clamp(event.pressure || 0.5),
-      Math.max(0, Math.round(event.timeStamp)),
-      event.tiltX,
-      event.tiltY,
-    ];
-  };
+  const pointFromEvent = useCallback(
+    (event: PointerEvent, canvas: HTMLCanvasElement): InkPoint => {
+      const rect = canvas.getBoundingClientRect();
+      return [
+        clamp((event.clientX - rect.left) / rect.width),
+        clamp((event.clientY - rect.top) / rect.height),
+        clamp(event.pressure || 0.5),
+        Math.max(0, Math.round(event.timeStamp)),
+        event.tiltX,
+        event.tiltY,
+      ];
+    },
+    [],
+  );
 
   const clearTouchPointers = () => {
     touchPointers.current.clear();
@@ -302,10 +308,10 @@ function InkCanvas({ document: sourceDocument, onChange }: InkCanvasProps) {
   };
 
   const eraseAt = (
-    event: ReactPointerEvent<HTMLCanvasElement>,
+    event: PointerEvent,
     page: number,
+    canvas: HTMLCanvasElement,
   ) => {
-    const canvas = event.currentTarget;
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
@@ -331,48 +337,17 @@ function InkCanvas({ document: sourceDocument, onChange }: InkCanvasProps) {
     });
   };
 
-  const startStroke = (
-    event: ReactPointerEvent<HTMLCanvasElement>,
-    page: number,
-  ) => {
-    if (event.pointerType !== "pen" && event.pointerType !== "mouse") return;
-    event.preventDefault();
-    if (activeStroke.current) finalizeActiveStroke();
-    clearTouchPointers();
-    if (tool === "eraser") {
-      eraseAt(event, page);
-      return;
-    }
-    const stroke: InkStrokeV2 = {
-      id: strokeId(),
-      page,
-      color,
-      width,
-      points: [pointFromEvent(event.nativeEvent, event.currentTarget)],
-    };
-    activeStroke.current = {
-      pointerId: event.pointerId,
-      pointerType: event.pointerType,
-      startedAt: event.timeStamp,
-      page,
-      canvas: event.currentTarget,
-      stroke,
-    };
-    const context = event.currentTarget.getContext("2d");
-    if (context) drawStroke(context, event.currentTarget, stroke);
-  };
+  const cancelPendingFinish = useCallback(() => {
+    const pending = pendingFinish.current;
+    if (!pending) return;
+    window.cancelAnimationFrame(pending.frameId);
+    pendingFinish.current = undefined;
+  }, []);
 
-  const finalizeActiveStroke = useCallback((event?: PointerEvent) => {
+  const finalizeActiveStroke = useCallback((expected?: ActiveStroke) => {
     const active = activeStroke.current;
-    if (
-      !active ||
-      (event !== undefined &&
-        (active.pointerId !== event.pointerId ||
-          active.pointerType !== event.pointerType ||
-          event.timeStamp < active.startedAt))
-    ) {
-      return;
-    }
+    if (!active || (expected && active !== expected)) return;
+    if (pendingFinish.current?.stroke === active) cancelPendingFinish();
     activeStroke.current = undefined;
     const current = documentRef.current;
     const shouldAddPage =
@@ -384,7 +359,58 @@ function InkCanvas({ document: sourceDocument, onChange }: InkCanvasProps) {
       pageCount: shouldAddPage ? current.pageCount + 1 : current.pageCount,
       strokes: [...current.strokes, active.stroke],
     });
-  }, [commit]);
+  }, [cancelPendingFinish, commit]);
+
+  const beginStroke = useCallback(
+    (
+      event: PointerEvent,
+      page: number,
+      canvas: HTMLCanvasElement,
+      appearance?: Pick<InkStrokeV2, "color" | "width">,
+      samples: PointerEvent[] = [event],
+    ) => {
+      const stroke: InkStrokeV2 = {
+        id: strokeId(),
+        page,
+        color: appearance?.color ?? color,
+        width: appearance?.width ?? width,
+        points: samples.map((sample) => pointFromEvent(sample, canvas)),
+      };
+      activeStroke.current = {
+        pointerId: event.pointerId,
+        pointerType: event.pointerType,
+        contactEnded: false,
+        page,
+        canvas,
+        stroke,
+      };
+      const context = canvas.getContext("2d");
+      if (context) drawStroke(context, canvas, stroke);
+    },
+    [color, drawStroke, pointFromEvent, width],
+  );
+
+  const startStroke = (event: PointerEvent, page: number) => {
+    if (event.pointerType !== "pen" && event.pointerType !== "mouse") return;
+    event.preventDefault();
+    const canvas = event.target;
+    if (!(canvas instanceof HTMLCanvasElement)) return;
+    if (event.pointerType === "pen") {
+      try {
+        canvas.releasePointerCapture?.(event.pointerId);
+      } catch {
+        // WebKit may throw when implicit capture is not active yet.
+      }
+    }
+    cancelPendingFinish();
+    if (activeStroke.current) finalizeActiveStroke(activeStroke.current);
+    clearTouchPointers();
+    if (tool === "eraser") {
+      eraseAt(event, page, canvas);
+      return;
+    }
+    beginStroke(event, page, canvas);
+  };
 
   const moveActiveStroke = useCallback((event: PointerEvent) => {
     const active = activeStroke.current;
@@ -392,13 +418,13 @@ function InkCanvas({ document: sourceDocument, onChange }: InkCanvasProps) {
       (event.pointerType !== "pen" && event.pointerType !== "mouse") ||
       !active ||
       active.pointerId !== event.pointerId ||
-      active.pointerType !== event.pointerType ||
-      event.timeStamp < active.startedAt
+      active.pointerType !== event.pointerType
     ) {
       return;
     }
     event.preventDefault();
     if (event.pressure === 0 && event.buttons === 0) {
+      active.contactEnded = true;
       return;
     }
     const coalesced =
@@ -409,10 +435,20 @@ function InkCanvas({ document: sourceDocument, onChange }: InkCanvasProps) {
       (sample) =>
         sample.pointerId === active.pointerId &&
         sample.pointerType === active.pointerType &&
-        sample.timeStamp >= active.startedAt &&
         (sample.pressure !== 0 || sample.buttons !== 0),
     );
     if (!samples.length) return;
+    cancelPendingFinish();
+    if (active.contactEnded) {
+      const { page, canvas } = active;
+      const appearance = {
+        color: active.stroke.color,
+        width: active.stroke.width,
+      };
+      finalizeActiveStroke(active);
+      beginStroke(event, page, canvas, appearance, samples);
+      return;
+    }
     const nextPoints = samples.map((sample) =>
       pointFromEvent(sample, active.canvas),
     );
@@ -428,13 +464,32 @@ function InkCanvas({ document: sourceDocument, onChange }: InkCanvasProps) {
         points: [...previous, ...nextPoints],
       });
     }
-  }, [drawStroke]);
+  }, [
+    beginStroke,
+    cancelPendingFinish,
+    drawStroke,
+    finalizeActiveStroke,
+    pointFromEvent,
+  ]);
 
   moveActiveStrokeRef.current = moveActiveStroke;
   finishActiveStrokeRef.current = (event: PointerEvent) => {
-    if (event.pointerType === "pen" || event.pointerType === "mouse") {
-      finalizeActiveStroke(event);
+    if (event.pointerType !== "pen" && event.pointerType !== "mouse") return;
+    const active = activeStroke.current;
+    if (
+      !active ||
+      active.pointerId !== event.pointerId ||
+      active.pointerType !== event.pointerType ||
+      pendingFinish.current?.stroke === active
+    ) {
+      return;
     }
+    const frameId = window.requestAnimationFrame(() => {
+      if (pendingFinish.current?.frameId !== frameId) return;
+      pendingFinish.current = undefined;
+      finalizeActiveStroke(active);
+    });
+    pendingFinish.current = { frameId, stroke: active };
   };
 
   useEffect(() => {
@@ -451,8 +506,9 @@ function InkCanvas({ document: sourceDocument, onChange }: InkCanvasProps) {
       window.removeEventListener("pointermove", moveActiveStroke);
       window.removeEventListener("pointerup", finishActiveStroke);
       window.removeEventListener("pointercancel", finishActiveStroke);
+      cancelPendingFinish();
     };
-  }, []);
+  }, [cancelPendingFinish]);
 
   const applyZoom = (nextValue: number, centerX: number, centerY: number) => {
     const viewport = viewportRef.current;
@@ -710,7 +766,9 @@ function InkCanvas({ document: sourceDocument, onChange }: InkCanvasProps) {
                     style={{ aspectRatio: String(ink.aspectRatio) }}
                     aria-label={`Apple Pencil 필기 영역 ${page + 1}페이지`}
                     tabIndex={0}
-                    onPointerDown={(event) => startStroke(event, page)}
+                    onPointerDown={(event) =>
+                      startStroke(event.nativeEvent, page)
+                    }
                   />
                 </div>
               ))}
