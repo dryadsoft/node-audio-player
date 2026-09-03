@@ -365,6 +365,16 @@ textarea {
   background: var(--panel-soft);
 }
 
+.button.danger {
+  border: 1px solid rgba(var(--danger-rgb), 0.42);
+  background: rgba(var(--danger-rgb), 0.12);
+  color: var(--danger);
+}
+
+.button.danger:hover:not(:disabled) {
+  background: rgba(var(--danger-rgb), 0.2);
+}
+
 .button.ghost {
   background: transparent;
   color: var(--muted);
@@ -2071,6 +2081,106 @@ textarea {
   gap: 12px;
 }
 
+.notebook-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.curriculum-manage-button {
+  min-height: 44px;
+  padding-inline: 11px;
+  font-size: 0.75rem;
+}
+
+.curriculum-action-notice {
+  max-width: 1500px;
+  margin: 0 auto 12px;
+  padding: 9px 12px;
+  border: 1px solid rgba(var(--accent-rgb), 0.28);
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+.curriculum-action-dialog {
+  width: min(520px, 100%);
+}
+
+.curriculum-action-dialog > p {
+  margin-top: 16px;
+  line-height: 1.65;
+}
+
+.curriculum-action-source {
+  margin-top: 20px;
+}
+
+.curriculum-action-source > span {
+  display: block;
+  margin-bottom: 7px;
+}
+
+.curriculum-action-source select {
+  width: 100%;
+}
+
+.danger-dialog {
+  border-color: rgba(var(--danger-rgb), 0.38);
+}
+
+.curriculum-delete-warning {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid rgba(var(--danger-rgb), 0.34);
+  border-radius: 12px;
+  background: rgba(var(--danger-rgb), 0.1);
+  color: var(--danger);
+}
+
+.curriculum-delete-warning > svg {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+}
+
+.curriculum-delete-warning div {
+  display: grid;
+  gap: 3px;
+}
+
+.curriculum-delete-warning span {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.curriculum-delete-confirm {
+  display: flex !important;
+  min-height: 44px;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px !important;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-soft);
+  color: var(--ink) !important;
+  cursor: pointer;
+}
+
+.curriculum-delete-confirm input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
 .save-indicator {
   display: inline-flex;
   min-height: 32px;
@@ -2428,6 +2538,10 @@ textarea {
   .notebook-page-heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+  .notebook-heading-actions {
+    width: 100%;
+    justify-content: flex-start;
   }
   .ink-pages-layer {
     padding: 10px;

@@ -1,4 +1,5 @@
 import {
+  DeleteLessonCurriculumResult,
   LibraryResponse,
   LessonLocation,
   LessonCurriculum,
@@ -153,6 +154,36 @@ export const api = {
           inkDocument: input.inkDocument,
           expectedRevision: input.revision,
         }),
+      },
+    ),
+  replaceLessonCurriculumWeeks: ({
+    id,
+    sourcePlanId,
+    expectedUpdatedAt,
+  }: {
+    id: string;
+    sourcePlanId: string | null;
+    expectedUpdatedAt: string;
+  }) =>
+    request<LessonCurriculum>(
+      `/api/lesson-curricula/${encodeURIComponent(id)}/weeks`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ sourcePlanId, expectedUpdatedAt }),
+      },
+    ),
+  deleteLessonCurriculum: ({
+    id,
+    expectedUpdatedAt,
+  }: {
+    id: string;
+    expectedUpdatedAt: string;
+  }) =>
+    request<DeleteLessonCurriculumResult>(
+      `/api/lesson-curricula/${encodeURIComponent(id)}`,
+      {
+        method: "DELETE",
+        body: JSON.stringify({ expectedUpdatedAt }),
       },
     ),
   lessonPlans: ({

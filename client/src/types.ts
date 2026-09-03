@@ -104,6 +104,11 @@ export interface LessonCurriculum extends LessonCurriculumSummary {
   weeks: LessonCurriculumWeekSummary[];
 }
 
+export interface DeleteLessonCurriculumResult {
+  id: string;
+  detachedPlanCount: number;
+}
+
 export interface LessonPlanSummary {
   id: string;
   year: number;
