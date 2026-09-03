@@ -15,6 +15,8 @@ const pointerEvent = (
   clientX: number,
   clientY: number,
   pointerId = 1,
+  pressure = 0.7,
+  buttons = 1,
 ) => {
   const event = new Event(type, { bubbles: true, cancelable: true });
   Object.defineProperties(event, {
@@ -22,11 +24,23 @@ const pointerEvent = (
     pointerId: { value: pointerId },
     clientX: { value: clientX },
     clientY: { value: clientY },
-    pressure: { value: 0.7 },
+    pressure: { value: pressure },
+    buttons: { value: buttons },
     tiltX: { value: 2 },
     tiltY: { value: -1 },
   });
   return event;
+};
+
+let context: {
+  setTransform: jest.Mock;
+  clearRect: jest.Mock;
+  beginPath: jest.Mock;
+  arc: jest.Mock;
+  fill: jest.Mock;
+  moveTo: jest.Mock;
+  lineTo: jest.Mock;
+  stroke: jest.Mock;
 };
 
 const prepareTouchViewport = () => {
@@ -42,7 +56,7 @@ const prepareTouchViewport = () => {
 
 describe("InkCanvas", () => {
   beforeEach(() => {
-    const context = {
+    context = {
       setTransform: jest.fn(),
       clearRect: jest.fn(),
       beginPath: jest.fn(),
@@ -51,10 +65,10 @@ describe("InkCanvas", () => {
       moveTo: jest.fn(),
       lineTo: jest.fn(),
       stroke: jest.fn(),
-    } as unknown as CanvasRenderingContext2D;
+    };
     jest
       .spyOn(HTMLCanvasElement.prototype, "getContext")
-      .mockReturnValue(context);
+      .mockReturnValue(context as unknown as CanvasRenderingContext2D);
     jest
       .spyOn(HTMLCanvasElement.prototype, "getBoundingClientRect")
       .mockReturnValue({
@@ -128,6 +142,39 @@ describe("InkCanvas", () => {
     expect(onChange.mock.calls[1][0].strokes).toHaveLength(2);
   });
 
+  it("records three reused-id Pencil strokes without pointer capture", () => {
+    const onChange = jest.fn();
+    render(<InkCanvas document={emptyDocument} onChange={onChange} />);
+    const canvas = screen.getByLabelText("Apple Pencil 필기 영역 1페이지");
+    const setPointerCapture = jest.fn(() => {
+      throw new DOMException("capture unavailable", "NotFoundError");
+    });
+    const releasePointerCapture = jest.fn(() => {
+      throw new DOMException("capture unavailable", "NotFoundError");
+    });
+    Object.assign(canvas, {
+      setPointerCapture,
+      hasPointerCapture: jest.fn().mockReturnValue(true),
+      releasePointerCapture,
+    });
+
+    for (let index = 0; index < 3; index += 1) {
+      fireEvent(
+        canvas,
+        pointerEvent("pointerdown", "pen", 40 + index * 40, 60, 7),
+      );
+      fireEvent(
+        canvas,
+        pointerEvent("pointerup", "pen", 60 + index * 40, 80, 7),
+      );
+    }
+
+    expect(onChange).toHaveBeenCalledTimes(3);
+    expect(onChange.mock.calls[2][0].strokes).toHaveLength(3);
+    expect(setPointerCapture).not.toHaveBeenCalled();
+    expect(releasePointerCapture).not.toHaveBeenCalled();
+  });
+
   it("recovers an unfinished Pencil stroke when the next stroke starts", () => {
     const onChange = jest.fn();
     render(<InkCanvas document={emptyDocument} onChange={onChange} />);
@@ -158,11 +205,65 @@ describe("InkCanvas", () => {
     });
 
     fireEvent(canvas, pointerEvent("pointerdown", "pen", 40, 60, 9));
-    fireEvent(canvas, pointerEvent("pointerup", "pen", 80, 90, 9));
     fireEvent(canvas, pointerEvent("pointercancel", "pen", 80, 90, 9));
+    fireEvent(canvas, pointerEvent("pointerup", "pen", 80, 90, 9));
 
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(onChange.mock.calls[0][0].strokes).toHaveLength(1);
+  });
+
+  it("finishes a Pencil stroke when pointerup occurs outside the canvas", () => {
+    const onChange = jest.fn();
+    render(<InkCanvas document={emptyDocument} onChange={onChange} />);
+    const canvas = screen.getByLabelText("Apple Pencil 필기 영역 1페이지");
+
+    fireEvent(canvas, pointerEvent("pointerdown", "pen", 40, 60, 5));
+    fireEvent(window, pointerEvent("pointermove", "pen", 80, 90, 5));
+    fireEvent(window, pointerEvent("pointerup", "pen", 80, 90, 5));
+    fireEvent(canvas, pointerEvent("pointerdown", "pen", 120, 130, 5));
+    fireEvent(window, pointerEvent("pointerup", "pen", 160, 170, 5));
+
+    expect(onChange).toHaveBeenCalledTimes(2);
+    expect(onChange.mock.calls[1][0].strokes).toHaveLength(2);
+    expect(onChange.mock.calls[0][0].strokes[0].points).toHaveLength(2);
+  });
+
+  it("recovers a missing pointerup from a zero-pressure move", () => {
+    const onChange = jest.fn();
+    render(<InkCanvas document={emptyDocument} onChange={onChange} />);
+    const canvas = screen.getByLabelText("Apple Pencil 필기 영역 1페이지");
+
+    fireEvent(canvas, pointerEvent("pointerdown", "pen", 40, 60, 6));
+    fireEvent(canvas, pointerEvent("pointermove", "pen", 80, 90, 6, 0, 0));
+    fireEvent(canvas, pointerEvent("pointerdown", "pen", 120, 130, 6));
+    fireEvent(window, pointerEvent("pointerup", "pen", 160, 170, 6));
+
+    expect(onChange).toHaveBeenCalledTimes(2);
+    expect(onChange.mock.calls[1][0].strokes).toHaveLength(2);
+  });
+
+  it("redraws an active Pencil stroke during a parent rerender", () => {
+    const onChange = jest.fn();
+    const { rerender } = render(
+      <InkCanvas document={emptyDocument} onChange={onChange} />,
+    );
+    const canvas = screen.getByLabelText("Apple Pencil 필기 영역 1페이지");
+
+    fireEvent(canvas, pointerEvent("pointerdown", "pen", 40, 60, 4));
+    fireEvent(canvas, pointerEvent("pointermove", "pen", 80, 90, 4));
+    context.stroke.mockClear();
+
+    rerender(
+      <InkCanvas
+        document={{ ...emptyDocument, strokes: [] }}
+        onChange={onChange}
+      />,
+    );
+
+    expect(context.clearRect).toHaveBeenCalled();
+    expect(context.stroke).toHaveBeenCalled();
+    fireEvent(window, pointerEvent("pointerup", "pen", 80, 90, 4));
+    expect(onChange).toHaveBeenCalledTimes(1);
   });
 
   it("adds a page after writing near the bottom of the last page", () => {
@@ -234,6 +335,8 @@ describe("InkCanvas", () => {
     expect(stage).toHaveStyle({ width: "1960px" });
     expect(pages).toHaveStyle({ transform: "scale(2)" });
     expect(pages).toContainElement(canvas);
+    fireEvent(viewport, pointerEvent("pointerup", "touch", 210, 10, 12));
+    expect(viewport.releasePointerCapture).not.toHaveBeenCalled();
   });
 
   it("opens and closes the ink-only fullscreen mode", () => {
