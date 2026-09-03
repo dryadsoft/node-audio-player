@@ -113,6 +113,20 @@ describe('LessonCurriculumService', () => {
     });
 
     expect(updatedWeek.hasInk).toBe(true);
+    expect(updatedWeek.inkDocument).toEqual({
+      version: 2,
+      aspectRatio: 4 / 3,
+      pageCount: 2,
+      strokes: [
+        {
+          id: 'stroke-1',
+          page: 0,
+          color: '#111827',
+          width: 4,
+          points: [[0.1, 0.2, 0.6, 1]],
+        },
+      ],
+    });
     expect(plans.get(created.id).weeks[0]).toEqual({
       week: 1,
       className: '눈 놀이',
@@ -166,5 +180,71 @@ describe('LessonCurriculumService', () => {
         weeks: weeks(),
       }),
     ).toThrow(BadRequestException);
+  });
+
+  it('stores paged ink and rejects out-of-range pages', () => {
+    const curriculum = curricula.create({
+      year: 2026,
+      term: 'summer',
+      programName: '페이지 필기',
+    });
+    const updated = curricula.updateWeek(curriculum.id, 1, {
+      className: '',
+      content: '',
+      lessonPlan: '',
+      materials: '',
+      inkDocument: {
+        version: 2,
+        aspectRatio: 4 / 3,
+        pageCount: 3,
+        strokes: [
+          {
+            id: 'page-3-stroke',
+            page: 2,
+            color: '#1d4ed8',
+            width: 2,
+            points: [[0.5, 0.9, 0.8, 1]],
+          },
+        ],
+      },
+      expectedRevision: 1,
+    });
+
+    expect(updated.inkDocument.pageCount).toBe(3);
+    expect(updated.inkDocument.strokes[0].page).toBe(2);
+    expect(() =>
+      curricula.updateWeek(curriculum.id, 1, {
+        ...updated,
+        inkDocument: {
+          ...updated.inkDocument,
+          strokes: [{ ...updated.inkDocument.strokes[0], page: 3 }],
+        },
+        expectedRevision: updated.revision,
+      }),
+    ).toThrow(BadRequestException);
+  });
+
+  it('does not count a legacy empty ink document as a completed week', () => {
+    const curriculum = curricula.create({
+      year: 2027,
+      term: 'spring',
+      programName: '기존 빈 필기',
+    });
+    sqlite.database
+      .prepare(
+        `UPDATE lesson_curriculum_weeks SET ink_json = ?
+         WHERE curriculum_id = ? AND week = 1`,
+      )
+      .run(
+        JSON.stringify({ version: 1, aspectRatio: 4 / 3, strokes: [] }),
+        curriculum.id,
+      );
+
+    expect(curricula.get(curriculum.id).completedWeeks).toBe(0);
+    expect(curricula.getWeek(curriculum.id, 1).inkDocument).toMatchObject({
+      version: 2,
+      pageCount: 2,
+      strokes: [],
+    });
   });
 });

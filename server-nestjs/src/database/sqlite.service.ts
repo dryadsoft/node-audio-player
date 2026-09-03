@@ -237,7 +237,7 @@ export class SqliteService implements OnModuleInit, OnModuleDestroy {
           content TEXT NOT NULL DEFAULT '',
           lesson_plan TEXT NOT NULL DEFAULT '',
           materials TEXT NOT NULL DEFAULT '',
-          ink_json TEXT NOT NULL DEFAULT '{"version":1,"aspectRatio":1.3333333333333333,"strokes":[]}',
+          ink_json TEXT NOT NULL DEFAULT '{"version":2,"aspectRatio":1.3333333333333333,"pageCount":2,"strokes":[]}',
           revision INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0),
           updated_at TEXT NOT NULL,
           PRIMARY KEY (curriculum_id, week),

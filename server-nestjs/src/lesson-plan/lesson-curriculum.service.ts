@@ -9,23 +9,25 @@ import { Buffer } from 'buffer';
 import { SqliteService } from '../database/sqlite.service';
 import { LESSON_TERMS, LessonTerm } from './lesson-plan.interface';
 import {
-  InkDocumentV1,
+  InkDocumentV2,
   InkPoint,
-  InkStroke,
+  InkStrokeV2,
   LessonCurriculumResponse,
   LessonCurriculumSummary,
   LessonCurriculumWeek,
   LessonCurriculumWeekSummary,
 } from './lesson-curriculum.interface';
 
-const EMPTY_INK: InkDocumentV1 = {
-  version: 1,
+const EMPTY_INK: InkDocumentV2 = {
+  version: 2,
   aspectRatio: 4 / 3,
+  pageCount: 2,
   strokes: [],
 };
 const MAX_INK_BYTES = 1024 * 1024;
 const MAX_INK_POINTS = 50000;
 const MAX_INK_STROKES = 5000;
+const MAX_INK_PAGES = 20;
 const INK_COLORS = new Set(['#111827', '#1d4ed8', '#dc2626']);
 const INK_WIDTHS = new Set([2, 4, 7]);
 
@@ -318,7 +320,7 @@ export class LessonCurriculumService {
       COALESCE(SUM(CASE
         WHEN TRIM(w.class_name) <> '' OR TRIM(w.content) <> ''
           OR TRIM(w.lesson_plan) <> '' OR TRIM(w.materials) <> ''
-          OR w.ink_json <> '${JSON.stringify(EMPTY_INK)}'
+          OR COALESCE(json_array_length(w.ink_json, '$.strokes'), 0) > 0
         THEN 1 ELSE 0 END), 0) AS completed_weeks,
       (SELECT COUNT(*) FROM lesson_plans p WHERE p.curriculum_id = c.id)
         AS linked_plan_count
@@ -362,41 +364,54 @@ export class LessonCurriculumService {
     };
   }
 
-  private parseInk(value: string): InkDocumentV1 {
+  private parseInk(value: string): InkDocumentV2 {
     try {
-      return JSON.parse(value) as InkDocumentV1;
+      return this.normalizeInk(JSON.parse(value));
     } catch {
       return { ...EMPTY_INK, strokes: [] };
     }
   }
 
-  private validateInk(value: unknown): InkDocumentV1 {
+  private validateInk(value: unknown): InkDocumentV2 {
+    return this.normalizeInk(value);
+  }
+
+  private normalizeInk(value: unknown): InkDocumentV2 {
     if (!value || typeof value !== 'object') {
       throw new BadRequestException('필기 데이터가 올바르지 않습니다.');
     }
     const document = value as Record<string, unknown>;
+    const version = document.version;
+    const pageCount = version === 1 ? 2 : Number(document.pageCount);
     if (
-      document.version !== 1 ||
+      (version !== 1 && version !== 2) ||
       typeof document.aspectRatio !== 'number' ||
       document.aspectRatio < 0.5 ||
       document.aspectRatio > 3 ||
+      !Number.isInteger(pageCount) ||
+      pageCount < 2 ||
+      pageCount > MAX_INK_PAGES ||
       !Array.isArray(document.strokes) ||
       document.strokes.length > MAX_INK_STROKES
     ) {
       throw new BadRequestException('필기 데이터가 올바르지 않습니다.');
     }
-    const strokes: InkStroke[] = [];
+    const strokes: InkStrokeV2[] = [];
     let pointCount = 0;
     for (const item of document.strokes) {
       if (!item || typeof item !== 'object') {
         throw new BadRequestException('필기 선 데이터가 올바르지 않습니다.');
       }
       const stroke = item as Record<string, unknown>;
+      const page = version === 1 ? 0 : Number(stroke.page);
       if (
         typeof stroke.id !== 'string' ||
         !stroke.id ||
         !INK_COLORS.has(String(stroke.color)) ||
         !INK_WIDTHS.has(Number(stroke.width)) ||
+        !Number.isInteger(page) ||
+        page < 0 ||
+        page >= pageCount ||
         !Array.isArray(stroke.points) ||
         stroke.points.length < 1
       ) {
@@ -409,14 +424,16 @@ export class LessonCurriculumService {
       const points = stroke.points.map((point) => this.validatePoint(point));
       strokes.push({
         id: stroke.id,
-        color: stroke.color as InkStroke['color'],
-        width: Number(stroke.width) as InkStroke['width'],
+        page,
+        color: stroke.color as InkStrokeV2['color'],
+        width: Number(stroke.width) as InkStrokeV2['width'],
         points,
       });
     }
-    const result: InkDocumentV1 = {
-      version: 1,
+    const result: InkDocumentV2 = {
+      version: 2,
       aspectRatio: document.aspectRatio,
+      pageCount,
       strokes,
     };
     if (Buffer.byteLength(JSON.stringify(result), 'utf8') > MAX_INK_BYTES) {

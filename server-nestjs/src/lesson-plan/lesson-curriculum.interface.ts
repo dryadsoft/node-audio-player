@@ -15,6 +15,17 @@ export interface InkDocumentV1 {
   strokes: InkStroke[];
 }
 
+export interface InkStrokeV2 extends InkStroke {
+  page: number;
+}
+
+export interface InkDocumentV2 {
+  version: 2;
+  aspectRatio: number;
+  pageCount: number;
+  strokes: InkStrokeV2[];
+}
+
 export interface LessonCurriculumWeekSummary {
   week: number;
   className: string;
@@ -27,7 +38,7 @@ export interface LessonCurriculumWeekSummary {
 }
 
 export interface LessonCurriculumWeek extends LessonCurriculumWeekSummary {
-  inkDocument: InkDocumentV1;
+  inkDocument: InkDocumentV2;
 }
 
 export interface LessonCurriculumSummary {

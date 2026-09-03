@@ -284,6 +284,11 @@ describe('AppController (e2e)', () => {
           materials: '도토리, 바구니',
           hasInk: true,
           revision: 2,
+          inkDocument: {
+            version: 2,
+            pageCount: 2,
+            strokes: [expect.objectContaining({ page: 0 })],
+          },
         });
       });
 
