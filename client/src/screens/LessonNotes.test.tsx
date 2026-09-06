@@ -164,7 +164,7 @@ describe("LessonNotes", () => {
     );
 
     expect(
-      await screen.findByRole("heading", { name: "가을학기 · 오감별" }),
+      await screen.findByRole("heading", { name: "1주차 공통 수업 기록" }),
     ).toBeInTheDocument();
     expect(screen.getByText(/장소 2곳 연결/)).toBeInTheDocument();
     fireEvent.click(screen.getByText("키보드 입력 열기"));
@@ -217,7 +217,7 @@ describe("LessonNotes", () => {
       </QueryClientProvider>,
     );
 
-    await screen.findByRole("heading", { name: "가을학기 · 오감별" });
+    await screen.findByRole("heading", { name: "1주차 공통 수업 기록" });
     const canvas = await screen.findByLabelText("Apple Pencil 필기 영역 1페이지");
     Object.assign(canvas, { releasePointerCapture: jest.fn() });
 
@@ -279,7 +279,7 @@ describe("LessonNotes", () => {
       </QueryClientProvider>,
     );
 
-    await screen.findByRole("heading", { name: "가을학기 · 오감별" });
+    await screen.findByRole("heading", { name: "1주차 공통 수업 기록" });
     fireEvent.click(screen.getByRole("button", { name: "12주 교체" }));
     const dialog = await screen.findByRole("dialog", { name: "공통 12주 교체" });
     fireEvent.change(within(dialog).getByLabelText("교체할 12주 원본"), {
@@ -335,7 +335,7 @@ describe("LessonNotes", () => {
       </QueryClientProvider>,
     );
 
-    await screen.findByRole("heading", { name: "가을학기 · 오감별" });
+    await screen.findByRole("heading", { name: "1주차 공통 수업 기록" });
     fireEvent.click(screen.getByRole("button", { name: "원본 삭제" }));
     const dialog = await screen.findByRole("dialog", { name: "공통 원본 삭제" });
     const deleteButton = within(dialog).getByRole("button", { name: "영구 삭제" });
@@ -381,7 +381,7 @@ describe("LessonNotes", () => {
       </QueryClientProvider>,
     );
 
-    await screen.findByRole("heading", { name: "가을학기 · 오감별" });
+    await screen.findByRole("heading", { name: "1주차 공통 수업 기록" });
     fireEvent.click(screen.getByRole("button", { name: "12주 교체" }));
     expect(
       await screen.findByText(
@@ -442,6 +442,67 @@ describe("LessonNotes", () => {
     return trigger;
   };
 
+  it("keeps text and ink when toggling keyboard fields and shows management in the top header", async () => {
+    const { draftStore, fetchMock } = renderNavigation();
+    const heading = await screen.findByRole("heading", { name: "1주차 공통 수업 기록" });
+    const topHeader = screen.getByRole("heading", { name: "공통 수업노트" }).closest("header")!;
+    expect(within(topHeader).getByRole("status")).toHaveTextContent("저장 완료");
+    expect(within(topHeader).getByRole("button", { name: "12주 교체" })).toBeEnabled();
+    expect(within(topHeader).getByRole("button", { name: "원본 삭제" })).toBeEnabled();
+    expect(within(topHeader).getByRole("button", { name: "새 공통 원본" })).toBeEnabled();
+    expect(screen.queryByRole("heading", { name: "가을학기 · 오감별" })).not.toBeInTheDocument();
+    const toggle = within(heading.parentElement!).getByRole("button", { name: "키보드 입력 열기" });
+    const fields = document.getElementById(toggle.getAttribute("aria-controls")!)!;
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(fields).not.toBeVisible();
+    const canvas = screen.getByLabelText("Apple Pencil 필기 영역 1페이지");
+    Object.assign(canvas, { releasePointerCapture: jest.fn() });
+    fireEvent(canvas, pencilEvent("pointerdown", 30, 40, 0.7, 1));
+    fireEvent(window, pencilEvent("pointerup", 60, 60, 0, 0));
+    await waitFor(() => expect(draftStore.get("curriculum-1:1")?.inkDocument.strokes).toHaveLength(1));
+    fireEvent.click(toggle);
+    expect(fields).toBeVisible();
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    fireEvent.change(screen.getByRole("textbox", { name: "1주차 공통 수업명" }), {
+      target: { value: "접어도 유지되는 기록" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "키보드 입력 닫기" }));
+    expect(fields).not.toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "키보드 입력 열기" }));
+    expect(screen.getByRole("textbox", { name: "1주차 공통 수업명" })).toHaveValue("접어도 유지되는 기록");
+    expect(screen.getByLabelText("Apple Pencil 필기 영역 1페이지")).toBe(canvas);
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, options]) => {
+      if (options?.method !== "PUT") return false;
+      const body = JSON.parse(String(options.body));
+      return body.className === "접어도 유지되는 기록" && body.inkDocument.strokes.length === 1;
+    })).toBe(true), { timeout: 2500 });
+  });
+
+  it("keeps save errors visible in the header and retries with the keyboard fields closed", async () => {
+    const { fetchMock } = renderNavigation();
+    const originalFetch = fetchMock.getMockImplementation()!;
+    let failSave = true;
+    fetchMock.mockImplementation((input, options) => options?.method === "PUT" && failSave
+      ? jsonResponse({ message: "저장 연결 실패" }, 503)
+      : originalFetch(input, options));
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    await screen.findByRole("heading", { name: "1주차 공통 수업 기록" });
+    fireEvent.click(screen.getByRole("button", { name: "키보드 입력 열기" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "1주차 공통 수업명" }), {
+      target: { value: "저장 재시도 기록" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "키보드 입력 닫기" }));
+    const topHeader = screen.getByRole("heading", { name: "공통 수업노트" }).closest("header")!;
+    expect(within(topHeader).getByRole("button", { name: "12주 교체" })).toBeDisabled();
+    await waitFor(() => expect(within(topHeader).getByRole("status")).toHaveTextContent("저장 실패"), { timeout: 2500 });
+    expect(within(topHeader).getByRole("button", { name: "원본 삭제" })).toBeDisabled();
+    failSave = false;
+    fireEvent.click(screen.getByRole("button", { name: "저장 재시도" }));
+    await waitFor(() => expect(within(topHeader).getByRole("status")).toHaveTextContent("저장 완료"), { timeout: 2500 });
+    expect(within(topHeader).getByRole("button", { name: "12주 교체" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "키보드 입력 열기" })).toHaveAttribute("aria-expanded", "false");
+  });
+
   it("browses another term without changing the note and only switches after choosing a week", async () => {
     const { fetchMock } = renderNavigation();
     await screen.findByLabelText("1주차 공통 수업명");
@@ -450,18 +511,20 @@ describe("LessonNotes", () => {
     const dialog = await screen.findByRole("dialog");
     const nav = await within(dialog).findByRole("navigation", { name: "주차 선택" });
     await waitFor(() => expect(within(nav).getAllByRole("button")).toHaveLength(12));
-    expect(screen.getByRole("heading", { name: "가을학기 · 오감별" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "1주차 공통 수업 기록" })).toBeInTheDocument();
     expect(screen.getByLabelText("Apple Pencil 필기 영역 1페이지")).toBe(canvas);
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("curriculum-2/weeks"))).toBe(false);
     fireEvent.click(within(nav).getByRole("button", { name: "12주차" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(await screen.findByLabelText("12주차 공통 수업명")).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole("heading", { name: "겨울학기 · 겨울 놀이" })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "12주차 공통 수업 기록" })).toHaveFocus());
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("curriculum-2/weeks/12"))).toBe(true);
   });
 
   it("closes and reopens the drawer without resetting the current canvas or draft", async () => {
     renderNavigation();
     const input = await screen.findByLabelText("1주차 공통 수업명");
+    fireEvent.click(screen.getByRole("button", { name: "키보드 입력 열기" }));
     fireEvent.change(input, { target: { value: "작성 중인 수업" } });
     const canvas = screen.getByLabelText("Apple Pencil 필기 영역 1페이지");
     const trigger = openTerm();
@@ -478,6 +541,7 @@ describe("LessonNotes", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByLabelText("1주차 공통 수업명")).toHaveValue("작성 중인 수업");
     expect(screen.getByLabelText("Apple Pencil 필기 영역 1페이지")).toBe(canvas);
+    expect(screen.getByRole("button", { name: "키보드 입력 닫기" })).toHaveAttribute("aria-expanded", "true");
     openTerm();
     dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: "주차 메뉴 닫기" }));
@@ -491,12 +555,14 @@ describe("LessonNotes", () => {
   it("restores the unsaved local draft when switching weeks before autosave", async () => {
     const { draftStore, fetchMock } = renderNavigation();
     const input = await screen.findByLabelText("1주차 공통 수업명");
+    fireEvent.click(screen.getByRole("button", { name: "키보드 입력 열기" }));
     fireEvent.change(input, { target: { value: "저장 대기 중 전환" } });
     await waitFor(() => expect(draftStore.get("curriculum-1:1")?.className).toBe("저장 대기 중 전환"));
     openTerm();
     const nextWeek = await within(screen.getByRole("dialog")).findByRole("button", { name: "2주차" });
     await act(async () => { fireEvent.click(nextWeek); });
     await screen.findByLabelText("2주차 공통 수업명");
+    expect(screen.getByRole("button", { name: "키보드 입력 열기" })).toHaveAttribute("aria-expanded", "false");
     openTerm();
     const previousWeek = await within(screen.getByRole("dialog")).findByRole("button", { name: /^1주차/ });
     await act(async () => { fireEvent.click(previousWeek); });
@@ -547,7 +613,7 @@ describe("LessonNotes", () => {
     failed = false;
     fireEvent.click(within(dialog).getByRole("button", { name: "다시 시도" }));
     expect(await within(dialog).findByRole("button", { name: "12주차" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "가을학기 · 오감별" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "1주차 공통 수업 기록" })).toBeInTheDocument();
   });
 
 });

@@ -59,6 +59,7 @@ function LessonNotes() {
   const [selectedWeek, setSelectedWeek] = useState(1);
   const [menuCurriculumId, setMenuCurriculumId] = useState<string | null>(null);
   const [focusNotebook, setFocusNotebook] = useState(false);
+  const [textFieldsOpen, setTextFieldsOpen] = useState(false);
   const curriculumBrowserRef = useRef<HTMLElement>(null);
   const notebookTitleRef = useRef<HTMLHeadingElement>(null);
   const [creating, setCreating] = useState(false);
@@ -412,6 +413,10 @@ function LessonNotes() {
     setFocusNotebook(false);
   }, [focusNotebook, detailQuery.data, draft]);
 
+  useEffect(() => {
+    setTextFieldsOpen(false);
+  }, [activeKey]);
+
   const saveLabel = {
     saved: "저장 완료",
     unsaved: "저장 대기",
@@ -423,10 +428,33 @@ function LessonNotes() {
   return (
     <main className="app-shell lesson-shell notes-shell">
       <AppNavigation />
-      <header className="compact-header">
+      <header className="compact-header notes-header">
         <h1>공통 수업노트</h1>
+        {detailQuery.data ? (
+          <div className="notes-header-actions">
+            <span className={`save-indicator ${saveState}`} role="status">
+              {saveState === "saved" ? <FiCheck /> : null}{saveLabel}
+            </span>
+            <button
+              className="button secondary curriculum-manage-button"
+              type="button"
+              disabled={checkingDrafts || saveState !== "saved"}
+              onClick={() => openManageDialog("replace")}
+            >
+              <FiRepeat /> 12주 교체
+            </button>
+            <button
+              className="button danger curriculum-manage-button"
+              type="button"
+              disabled={checkingDrafts || saveState !== "saved"}
+              onClick={() => openManageDialog("delete")}
+            >
+              <FiTrash2 /> 원본 삭제
+            </button>
+          </div>
+        ) : null}
         <button
-          className="button accent"
+          className="button accent notes-create-button"
           type="button"
           onClick={() => setCreating((current) => !current)}
         >
@@ -560,49 +588,34 @@ function LessonNotes() {
         <section className="notebook-sheet" aria-label="주차별 수업노트">
           {detailQuery.data ? (
             <>
-              <header className="notebook-heading">
-                <div>
-                  <span className="eyebrow">{detailQuery.data.year} SHARED COURSE</span>
-                  <h2 ref={notebookTitleRef} tabIndex={-1}>{TERM_LABELS[detailQuery.data.term]} · {detailQuery.data.programName}</h2>
-                </div>
-                <div className="notebook-heading-actions">
-                  <span className={`save-indicator ${saveState}`} role="status">
-                    {saveState === "saved" ? <FiCheck /> : null}{saveLabel}
-                  </span>
-                  <button
-                    className="button secondary curriculum-manage-button"
-                    type="button"
-                    disabled={checkingDrafts || saveState !== "saved"}
-                    onClick={() => openManageDialog("replace")}
-                  >
-                    <FiRepeat /> 12주 교체
-                  </button>
-                  <button
-                    className="button danger curriculum-manage-button"
-                    type="button"
-                    disabled={checkingDrafts || saveState !== "saved"}
-                    onClick={() => openManageDialog("delete")}
-                  >
-                    <FiTrash2 /> 원본 삭제
-                  </button>
-                </div>
-              </header>
               {draft ? (
                 <div className="notebook-page">
                   <div className="notebook-page-heading">
-                    <div><b>{selectedWeek}주차</b><span>공통 수업 기록</span></div>
-                    {saveState === "error" ? (
+                    <h2 ref={notebookTitleRef} tabIndex={-1}>
+                      <b>{selectedWeek}주차</b> <span>공통 수업 기록</span>
+                    </h2>
+                    <div className="notebook-page-actions">
+                      {saveState === "error" ? (
+                        <button
+                          className="button secondary"
+                          type="button"
+                          onClick={() => setSaveState("unsaved")}
+                        >
+                          <FiRefreshCw /> 저장 재시도
+                        </button>
+                      ) : null}
                       <button
                         className="button secondary"
                         type="button"
-                        onClick={() => setSaveState("unsaved")}
+                        aria-expanded={textFieldsOpen}
+                        aria-controls="note-text-fields"
+                        onClick={() => setTextFieldsOpen((current) => !current)}
                       >
-                        <FiRefreshCw /> 저장 재시도
+                        키보드 입력 {textFieldsOpen ? "닫기" : "열기"}
                       </button>
-                    ) : null}
+                    </div>
                   </div>
-                  <details className="note-text-fields">
-                    <summary>키보드 입력 열기 <span>선택 사항</span></summary>
+                  <div id="note-text-fields" className="note-text-fields" hidden={!textFieldsOpen}>
                     <div className="note-text-grid">
                       <label>
                         <span>수업명 <small>계획서 반영</small></span>
@@ -640,7 +653,7 @@ function LessonNotes() {
                         />
                       </label>
                     </div>
-                  </details>
+                  </div>
                   <div className="ink-boundary-note">
                     자유 필기는 수업노트에만 저장되며 강의계획서와 DOCX에는 표시되지 않습니다.
                   </div>

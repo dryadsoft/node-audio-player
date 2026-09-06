@@ -1959,20 +1959,50 @@ textarea {
   padding: 18px;
 }
 
-.notebook-heading,
 .notebook-page-heading {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
 }
 
-.notebook-heading-actions {
+.notes-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas: "title actions create";
+}
+
+.notes-header h1 {
+  grid-area: title;
+}
+
+.notes-create-button {
+  grid-area: create;
+  justify-self: end;
+}
+
+.notes-header-actions,
+.notebook-page-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 7px;
+}
+
+.notes-header-actions {
+  grid-area: actions;
+}
+
+.notebook-page-actions {
+  margin-left: auto;
+}
+
+.notebook-page-actions .button {
+  min-height: 44px;
+  padding-inline: 10px;
+  font-size: 0.75rem;
 }
 
 .curriculum-manage-button {
@@ -2094,10 +2124,13 @@ textarea {
   background: rgba(var(--canvas-deep-rgb), 0.34);
 }
 
-.notebook-page-heading > div {
+.notebook-page-heading h2 {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 8px;
+  min-width: 0;
+  font-size: inherit;
 }
 
 .notebook-page-heading b {
@@ -2118,14 +2151,6 @@ textarea {
   background: var(--panel);
 }
 
-.note-text-fields summary {
-  padding: 11px 13px;
-  cursor: pointer;
-  font-size: 0.78rem;
-  font-weight: 800;
-}
-
-.note-text-fields summary span,
 .note-text-grid small {
   color: var(--muted);
   font-size: 0.64rem;
@@ -2136,7 +2161,7 @@ textarea {
   display: grid;
   grid-template-columns: 0.7fr 1.3fr 1fr 1fr;
   gap: 10px;
-  padding: 0 13px 13px;
+  padding: 13px;
 }
 
 .ink-boundary-note {
@@ -2182,13 +2207,12 @@ textarea {
   .notebook-sheet {
     padding: 10px;
   }
-  .notebook-heading,
-  .notebook-page-heading {
-    align-items: flex-start;
-    flex-direction: column;
+  .notes-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "title create" "actions actions";
   }
-  .notebook-heading-actions {
-    width: 100%;
+
+  .notes-header-actions {
     justify-content: flex-start;
   }
 }
@@ -2199,7 +2223,7 @@ textarea {
 .notes-workspace > *,
 .lesson-toolbar label,
 .curriculum-create label,
-.notebook-heading > div {
+.notebook-page-heading > * {
   min-width: 0;
 }
 
@@ -2208,12 +2232,6 @@ textarea {
   gap: 8px;
 }
 
-.notebook-heading {
-  margin-bottom: 8px;
-  flex-wrap: wrap;
-}
-
-.notebook-heading h2,
 .curriculum-card,
 .sheet-heading h2 {
   overflow-wrap: anywhere;
