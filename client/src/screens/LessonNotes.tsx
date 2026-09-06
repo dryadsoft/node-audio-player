@@ -10,6 +10,7 @@ import {
   FiX,
 } from "react-icons/fi";
 import { useMutation, useQuery, useQueryClient } from "react-query";
+import { InkCanvas } from "@dryadsoft/react-ink-canvas";
 import { api } from "../api";
 import {
   clearLessonNoteDraft,
@@ -18,7 +19,6 @@ import {
   saveLessonNoteDraft,
 } from "../api/lessonNoteDrafts";
 import AppNavigation from "../components/AppNavigation";
-import InkCanvas from "../components/InkCanvas";
 import {
   LessonCurriculum,
   LessonCurriculumSummary,

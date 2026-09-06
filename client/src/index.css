@@ -2302,203 +2302,12 @@ textarea {
   padding: 0 13px 13px;
 }
 
-.ink-boundary-note,
-.ink-help {
-  color: var(--muted);
-  font-size: 0.7rem;
-}
-
 .ink-boundary-note {
   margin: 9px 0;
   padding-left: 9px;
   border-left: 3px solid var(--accent);
-}
-
-.ink-editor {
-  display: flex;
-  min-height: 0;
-  flex-direction: column;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  overflow: hidden;
-  background: #fff;
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-.ink-toolbar {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 8px;
-  padding: 8px;
-  overflow-x: auto;
-  border-bottom: 1px solid #d8d8d8;
-  background: #f4f1e9;
-  color: #151817;
-}
-
-.ink-tool-group {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 4px;
-  padding-right: 8px;
-  border-right: 1px solid #d2cec4;
-}
-
-.ink-tool-group:last-child {
-  padding-right: 0;
-  border-right: 0;
-}
-
-.ink-toolbar button {
-  display: inline-flex;
-  min-width: 36px;
-  min-height: 36px;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  padding: 0 9px;
-  border: 1px solid #cbc7bc;
-  border-radius: 8px;
-  background: #fff;
-  color: #202523;
-  cursor: pointer;
-  font-size: 0.72rem;
-  font-weight: 800;
-}
-
-.ink-toolbar button.active {
-  border-color: #a57938;
-  box-shadow: inset 0 0 0 1px #a57938;
-}
-
-.ink-toolbar .ink-color {
-  min-width: 36px;
-  padding: 0;
-}
-
-.ink-color::after {
-  width: 17px;
-  height: 17px;
-  border-radius: 50%;
-  background: currentColor;
-  content: "";
-}
-
-.ink-history-tools {
-  margin-left: 0;
-}
-
-.ink-view-tools {
-  margin-left: auto;
-}
-
-.ink-scroll-viewport {
-  height: clamp(440px, 58vh, 720px);
-  overflow: auto;
-  background: #ddd9d0;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-  touch-action: none;
-}
-
-.ink-scroll-content {
-  width: max-content;
-  min-width: 100%;
-  min-height: 100%;
-}
-
-.ink-zoom-stage {
-  position: relative;
-  margin-inline: auto;
-}
-
-.ink-pages-layer {
-  position: absolute;
-  top: 0;
-  left: 0;
-  box-sizing: border-box;
-  padding: 18px;
-  transform-origin: top left;
-}
-
-.ink-page {
-  position: relative;
-  margin-bottom: 18px;
-  border: 1px solid #c9c5bb;
-  background: #fff;
-  box-shadow: 0 9px 24px rgba(24, 26, 25, 0.13);
-}
-
-.ink-page:last-child {
-  margin-bottom: 0;
-}
-
-.ink-page-number {
-  position: absolute;
-  z-index: 1;
-  right: 10px;
-  bottom: 8px;
-  display: inline-flex;
-  min-width: 24px;
-  min-height: 24px;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #d8d4ca;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.9);
-  color: #77736a;
-  font-size: 0.68rem;
-  font-weight: 800;
-  pointer-events: none;
-}
-
-.ink-canvas {
-  display: block;
-  width: 100%;
-  background:
-    radial-gradient(circle, #d9dfe5 1px, transparent 1.2px) 0 0 / 22px 22px,
-    #fff;
-  cursor: crosshair;
-  touch-action: none;
-}
-
-.ink-help {
-  flex: 0 0 auto;
-  padding: 7px 10px;
-  border-top: 1px solid #e1ded7;
-  background: #f8f6f1;
-  color: #666b68;
-}
-
-.ink-fullscreen-open {
-  overflow: hidden;
-}
-
-.ink-editor-fullscreen {
-  position: fixed;
-  z-index: 1000;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
-  height: 100dvh;
-  padding-top: env(safe-area-inset-top);
-  padding-right: env(safe-area-inset-right);
-  padding-bottom: env(safe-area-inset-bottom);
-  padding-left: env(safe-area-inset-left);
-  border: 0;
-  border-radius: 0;
-  background: #ece8de;
-}
-
-.ink-editor-fullscreen .ink-scroll-viewport {
-  height: auto;
-  max-height: none;
-  flex: 1 1 auto;
+  color: var(--muted);
+  font-size: 0.7rem;
 }
 
 @media (max-width: 900px) {
@@ -2529,9 +2338,6 @@ textarea {
   .note-text-grid {
     grid-template-columns: 1fr 1fr;
   }
-  .ink-scroll-viewport {
-    height: min(62vh, 680px);
-  }
 }
 
 @media (max-width: 560px) {
@@ -2554,11 +2360,5 @@ textarea {
   .notebook-heading-actions {
     width: 100%;
     justify-content: flex-start;
-  }
-  .ink-pages-layer {
-    padding: 10px;
-  }
-  .ink-scroll-viewport {
-    height: 58vh;
   }
 }

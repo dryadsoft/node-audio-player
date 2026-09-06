@@ -1,3 +1,14 @@
+import type { InkDocument } from "@dryadsoft/react-ink-canvas";
+
+export type {
+  InkDocument,
+  InkDocumentV1,
+  InkDocumentV2,
+  InkPoint,
+  InkStroke,
+  InkStrokeV2,
+} from "@dryadsoft/react-ink-canvas";
+
 export interface TrackReference {
   path: string;
   name: string;
@@ -45,34 +56,6 @@ export interface LessonWeek {
   className: string;
   content: string;
 }
-
-export type InkPoint = [number, number, number, number, number?, number?];
-
-export interface InkStroke {
-  id: string;
-  color: "#111827" | "#1d4ed8" | "#dc2626";
-  width: 2 | 4 | 7;
-  points: InkPoint[];
-}
-
-export interface InkDocumentV1 {
-  version: 1;
-  aspectRatio: number;
-  strokes: InkStroke[];
-}
-
-export interface InkStrokeV2 extends InkStroke {
-  page: number;
-}
-
-export interface InkDocumentV2 {
-  version: 2;
-  aspectRatio: number;
-  pageCount: number;
-  strokes: InkStrokeV2[];
-}
-
-export type InkDocument = InkDocumentV1 | InkDocumentV2;
 
 export interface LessonCurriculumWeekSummary {
   week: number;
