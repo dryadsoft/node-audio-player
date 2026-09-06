@@ -8,7 +8,7 @@ import { mkdirSync } from 'fs';
 import { dirname, resolve } from 'path';
 import { loadSqlite, SqliteDatabase } from './sqlite.types';
 
-const MIGRATION_VERSION = 4;
+const MIGRATION_VERSION = 5;
 
 @Injectable()
 export class SqliteService implements OnModuleInit, OnModuleDestroy {
@@ -254,6 +254,12 @@ export class SqliteService implements OnModuleInit, OnModuleDestroy {
         CREATE INDEX lesson_plans_curriculum_idx
           ON lesson_plans(curriculum_id);
       `);
+        }
+        if (version === 5) {
+          database.exec(`
+            ALTER TABLE lesson_curriculum_weeks DROP COLUMN lesson_plan;
+            ALTER TABLE lesson_curriculum_weeks DROP COLUMN materials;
+          `);
         }
         database
           .prepare(

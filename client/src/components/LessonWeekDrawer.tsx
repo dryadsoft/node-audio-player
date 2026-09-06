@@ -34,8 +34,23 @@ function LessonWeekDrawer({
   const [curriculumId, setCurriculumId] = useState(initialCurriculumId);
   const dialogRef = useRef<HTMLElement>(null);
   const restoreFocus = useRef(true);
+  const releaseDialog = useRef<() => void>(() => {});
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  const [closing, setClosing] = useState(false);
+  const closingRef = useRef(false);
+  const timer = useRef<number>();
+  const finish = useRef<(() => void)>();
+  const close = (action = onClose) => {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) { releaseDialog.current(); action(); return; }
+    finish.current = () => { window.clearTimeout(timer.current); finish.current = undefined; releaseDialog.current(); action(); };
+    setClosing(true);
+    timer.current = window.setTimeout(() => finish.current?.(), 220);
+  };
+  closeRef.current = () => close();
+  useEffect(() => () => window.clearTimeout(timer.current), []);
   const curriculum = curricula.find((item) => item.id === curriculumId);
   const detailQuery = useQuery<LessonCurriculum>(
     ["lessonCurriculum", curriculumId],
@@ -87,13 +102,17 @@ function LessonWeekDrawer({
     window.addEventListener("resize", position);
     document.addEventListener("keydown", onKeyDown);
     document.addEventListener("focusin", containFocus);
-    return () => {
+    let released = false;
+    releaseDialog.current = () => {
+      if (released) return;
+      released = true;
       window.removeEventListener("resize", position);
       document.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("focusin", containFocus);
       document.body.style.overflow = previousOverflow;
       if (restoreFocus.current && opener?.isConnected) opener.focus({ preventScroll: true });
     };
+    return () => releaseDialog.current();
   }, [anchorRef]);
 
   useEffect(() => {
@@ -106,12 +125,13 @@ function LessonWeekDrawer({
   }, [curriculumId, detail?.id, detailQuery.isError]);
 
   return createPortal(
-    <div className="lesson-drawer-backdrop" onClick={(event) => {
-      if (event.target === event.currentTarget) onClose();
+    <div className={`lesson-drawer-backdrop ${closing ? "closing" : ""}`} onClick={(event) => {
+      if (event.target === event.currentTarget) close();
     }}>
       <section
         id="lesson-week-drawer"
         className="lesson-week-drawer"
+        onAnimationEnd={(event) => { if (closing && event.target === event.currentTarget) finish.current?.(); }}
         role="dialog"
         aria-modal="true"
         aria-labelledby="lesson-drawer-title"
@@ -124,7 +144,7 @@ function LessonWeekDrawer({
             </h2>
             {curriculum ? <p>{curriculum.programName}</p> : null}
           </div>
-          <button className="button icon-button" type="button" aria-label="주차 메뉴 닫기" onClick={onClose}>
+          <button className="button icon-button" type="button" aria-label="주차 메뉴 닫기" onClick={() => close()}>
             <FiX aria-hidden="true" />
           </button>
         </header>
@@ -154,7 +174,7 @@ function LessonWeekDrawer({
           ) : !detail ? (
             <p className="lesson-drawer-state" role="status">주차 목록을 불러오는 중...</p>
           ) : detail.weeks.map((week) => {
-            const filled = Boolean(week.hasInk || week.className || week.content || week.lessonPlan || week.materials);
+            const filled = Boolean(week.hasInk || week.className || week.content);
             return (
               <button
                 type="button"
@@ -163,7 +183,7 @@ function LessonWeekDrawer({
                 aria-current={curriculumId === selectedId && week.week === selectedWeek ? "true" : undefined}
                 onClick={() => {
                   restoreFocus.current = false;
-                  onSelect(curriculumId, week.week);
+                  close(() => onSelect(curriculumId, week.week));
                 }}
               >
                 <b>{week.week}주차</b>

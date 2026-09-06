@@ -2465,3 +2465,18 @@ textarea {
     animation: none;
   }
 }
+
+.lesson-drawer-backdrop.closing { animation: drawer-fade-out 200ms ease-in forwards; pointer-events: none; }
+.lesson-drawer-backdrop.closing .lesson-week-drawer { animation: drawer-slide-out 200ms ease-in forwards; }
+@keyframes drawer-fade-out { to { opacity: 0; } }
+@keyframes drawer-slide-out { to { transform: translateX(-100%); opacity: 0; } }
+.notebook-inline-fields { display: grid; grid-template-columns: auto minmax(120px, 1fr) minmax(180px, 2fr); gap: 10px; align-items: center; padding: 8px 12px; }
+.notebook-inline-fields h2 { margin: 0; font-size: 16px; white-space: nowrap; }
+.notebook-inline-fields input, .notebook-inline-fields textarea { min-width: 0; width: 100%; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 6px; padding: 7px 9px; }
+.notebook-inline-fields textarea { resize: none; overflow: auto; max-height: 62px; }
+.note-conflicts { max-height: 35vh; overflow: auto; padding: 10px; background: rgba(190, 130, 30, 0.15); }
+.note-conflict { display: grid; grid-template-columns: auto 1fr 1fr; gap: 8px; }
+.note-conflict pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.note-conflict svg { height: 100px; width: 100%; }
+@media (max-width: 600px) { .notebook-inline-fields { grid-template-columns: auto minmax(0, 1fr); } .notebook-inline-fields textarea { grid-column: 1 / -1; } }
+@media (prefers-reduced-motion: reduce) { .lesson-drawer-backdrop.closing, .lesson-drawer-backdrop.closing .lesson-week-drawer { animation: none; } }

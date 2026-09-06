@@ -62,8 +62,6 @@ interface CurriculumWeekRow {
   week: number;
   class_name: string;
   content: string;
-  lesson_plan: string;
-  materials: string;
   ink_json: string;
   revision: number;
   updated_at: string;
@@ -79,8 +77,6 @@ interface CurriculumInput {
 interface WeekInput {
   className?: unknown;
   content?: unknown;
-  lessonPlan?: unknown;
-  materials?: unknown;
   inkDocument?: unknown;
   expectedRevision?: unknown;
 }
@@ -135,7 +131,7 @@ export class LessonCurriculumService {
     const row = this.findCurriculum(id);
     const weeks = this.sqlite.database
       .prepare(
-        `SELECT week, class_name, content, lesson_plan, materials, ink_json,
+        `SELECT week, class_name, content, ink_json,
                 revision, updated_at
          FROM lesson_curriculum_weeks
          WHERE curriculum_id = ? ORDER BY week`,
@@ -152,7 +148,7 @@ export class LessonCurriculumService {
     const week = this.validateWeekNumber(weekValue);
     const row = this.sqlite.database
       .prepare(
-        `SELECT week, class_name, content, lesson_plan, materials, ink_json,
+        `SELECT week, class_name, content, ink_json,
                 revision, updated_at
          FROM lesson_curriculum_weeks
          WHERE curriculum_id = ? AND week = ?`,
@@ -242,9 +238,9 @@ export class LessonCurriculumService {
         );
       const insert = database.prepare(
         `INSERT INTO lesson_curriculum_weeks
-         (curriculum_id, week, class_name, content, lesson_plan, materials,
+         (curriculum_id, week, class_name, content,
           ink_json, revision, updated_at)
-         VALUES (?, ?, ?, ?, '', '', ?, 1, ?)`,
+         VALUES (?, ?, ?, ?, ?, 1, ?)`,
       );
       for (let week = 1; week <= 12; week += 1) {
         const source = sourceWeeks.find((item) => item.week === week);
@@ -269,8 +265,6 @@ export class LessonCurriculumService {
     const week = this.validateWeekNumber(weekValue);
     const className = this.validateText(input.className, '수업명', 500);
     const content = this.validateText(input.content, '수업할 내용', 5000);
-    const lessonPlan = this.validateText(input.lessonPlan, '진행 플랜', 5000);
-    const materials = this.validateText(input.materials, '사용 교구', 3000);
     const inkDocument = this.validateInk(input.inkDocument);
     const expectedRevision = this.validateRevision(input.expectedRevision);
 
@@ -280,15 +274,13 @@ export class LessonCurriculumService {
       const result = database
         .prepare(
           `UPDATE lesson_curriculum_weeks
-           SET class_name = ?, content = ?, lesson_plan = ?, materials = ?,
+           SET class_name = ?, content = ?,
                ink_json = ?, revision = revision + 1, updated_at = ?
            WHERE curriculum_id = ? AND week = ? AND revision = ?`,
         )
         .run(
           className,
           content,
-          lessonPlan,
-          materials,
           JSON.stringify(inkDocument),
           now,
           curriculumId,
@@ -492,7 +484,6 @@ export class LessonCurriculumService {
       c.created_at, c.updated_at,
       COALESCE(SUM(CASE
         WHEN TRIM(w.class_name) <> '' OR TRIM(w.content) <> ''
-          OR TRIM(w.lesson_plan) <> '' OR TRIM(w.materials) <> ''
           OR COALESCE(json_array_length(w.ink_json, '$.strokes'), 0) > 0
         THEN 1 ELSE 0 END), 0) AS completed_weeks,
       (SELECT COUNT(*) FROM lesson_plans p WHERE p.curriculum_id = c.id)
@@ -529,8 +520,6 @@ export class LessonCurriculumService {
       week: row.week,
       className: row.class_name,
       content: row.content,
-      lessonPlan: row.lesson_plan,
-      materials: row.materials,
       hasInk: this.parseInk(row.ink_json).strokes.length > 0,
       revision: row.revision,
       updatedAt: row.updated_at,

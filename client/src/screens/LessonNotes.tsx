@@ -17,8 +17,8 @@ import {
   clearLessonNoteDraft,
   lessonNoteDraftKey,
   loadLessonNoteDraft,
-  saveLessonNoteDraft,
 } from "../api/lessonNoteDrafts";
+import { useLessonNoteSync } from "../hooks/useLessonNoteSync";
 import AppNavigation from "../components/AppNavigation";
 import LessonWeekDrawer from "../components/LessonWeekDrawer";
 import {
@@ -41,16 +41,8 @@ const TERM_LABELS: Record<LessonTerm, string> = {
   fall: "가을학기",
   winter: "겨울학기",
 };
-type SaveState = "saved" | "unsaved" | "saving" | "error" | "recovered";
 type ManageDialog = "replace" | "delete" | null;
 const EMPTY_REPLACEMENT = "__empty__";
-
-interface SaveVariables {
-  curriculumId: string;
-  key: string;
-  version: number;
-  data: LessonCurriculumWeek;
-}
 
 function LessonNotes() {
   const currentYear = new Date().getFullYear();
@@ -59,7 +51,6 @@ function LessonNotes() {
   const [selectedWeek, setSelectedWeek] = useState(1);
   const [menuCurriculumId, setMenuCurriculumId] = useState<string | null>(null);
   const [focusNotebook, setFocusNotebook] = useState(false);
-  const [textFieldsOpen, setTextFieldsOpen] = useState(false);
   const curriculumBrowserRef = useRef<HTMLElement>(null);
   const notebookTitleRef = useRef<HTMLHeadingElement>(null);
   const [creating, setCreating] = useState(false);
@@ -67,26 +58,20 @@ function LessonNotes() {
   const [createTerm, setCreateTerm] = useState<LessonTerm>("spring");
   const [createProgram, setCreateProgram] = useState("오감별");
   const [sourcePlanId, setSourcePlanId] = useState("");
-  const [draft, setDraft] = useState<LessonCurriculumWeek>();
-  const [dirty, setDirty] = useState(false);
-  const [saveState, setSaveState] = useState<SaveState>("saved");
   const [manageDialog, setManageDialog] = useState<ManageDialog>(null);
   const [replaceSourceId, setReplaceSourceId] = useState("");
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
   const [actionError, setActionError] = useState("");
   const [actionNotice, setActionNotice] = useState("");
   const [checkingDrafts, setCheckingDrafts] = useState(false);
-  const editVersion = useRef(0);
-  const loadedKey = useRef("");
   const activeKey = selectedId
     ? lessonNoteDraftKey(selectedId, selectedWeek)
     : "";
-  const activeKeyRef = useRef(activeKey);
-  activeKeyRef.current = activeKey;
 
   const curriculaQuery = useQuery<LessonCurriculumSummary[]>(
     "lessonCurricula",
     () => api.lessonCurricula(),
+    { refetchInterval: 2000, refetchIntervalInBackground: false, refetchOnWindowFocus: "always", refetchOnReconnect: "always" },
   );
   const plansQuery = useQuery<LessonPlanSummary[]>("lessonPlans", () =>
     api.lessonPlans(),
@@ -107,7 +92,7 @@ function LessonNotes() {
   const detailQuery = useQuery<LessonCurriculum>(
     ["lessonCurriculum", selectedId],
     () => api.lessonCurriculum(selectedId),
-    { enabled: Boolean(selectedId) },
+    { enabled: Boolean(selectedId), refetchInterval: 2000, refetchIntervalInBackground: false, refetchOnWindowFocus: "always", refetchOnReconnect: "always" },
   );
   const weekQuery = useQuery<LessonCurriculumWeek>(
     ["lessonCurriculumWeek", selectedId, selectedWeek],
@@ -115,117 +100,14 @@ function LessonNotes() {
     { enabled: Boolean(selectedId) },
   );
 
+  const sync = useLessonNoteSync(selectedId, selectedWeek, weekQuery.data);
+  const { draft, dirty, saveState, update: updateDraft } = sync;
+  const saveMutation = { isLoading: saveState === "saving" };
+  const currentRevision = detailQuery.data?.weeks.find(item => item.week === selectedWeek)?.revision;
+  const { refetch: refetchWeek } = weekQuery;
   useEffect(() => {
-    if (!weekQuery.data || !activeKey || loadedKey.current === activeKey) return;
-    let active = true;
-    loadedKey.current = activeKey;
-    const serverWeek = weekQuery.data;
-    setDraft(serverWeek);
-    setDirty(false);
-    setSaveState("saved");
-    loadLessonNoteDraft(activeKey)
-      .then((recovered) => {
-        if (!active || !recovered) return;
-        if (recovered.revision === serverWeek.revision) {
-          setDraft(recovered);
-          setDirty(true);
-          setSaveState("recovered");
-          editVersion.current += 1;
-        } else {
-          clearLessonNoteDraft(activeKey).catch(() => undefined);
-        }
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [activeKey, weekQuery.data]);
-
-  const saveMutation = useMutation<
-    LessonCurriculumWeek,
-    unknown,
-    SaveVariables
-  >(
-    ({ curriculumId, data }) =>
-      api.updateLessonCurriculumWeek({ ...data, id: curriculumId }),
-    {
-      onMutate: () => setSaveState("saving"),
-      onSuccess: async (saved, variables) => {
-        queryClient.setQueryData(
-          ["lessonCurriculumWeek", variables.curriculumId, saved.week],
-          saved,
-        );
-        await Promise.all([
-          queryClient.invalidateQueries("lessonCurricula"),
-          queryClient.invalidateQueries([
-            "lessonCurriculum",
-            variables.curriculumId,
-          ]),
-          queryClient.invalidateQueries("lessonPlans"),
-        ]);
-        if (variables.key !== activeKeyRef.current) return;
-        if (variables.version === editVersion.current) {
-          await clearLessonNoteDraft(variables.key).catch(() => undefined);
-          setDraft(saved);
-          setDirty(false);
-          setSaveState("saved");
-        } else {
-          setDraft((current) => {
-            if (!current) return current;
-            const next = { ...current, revision: saved.revision };
-            saveLessonNoteDraft(variables.key, next).catch(() => undefined);
-            return next;
-          });
-          setSaveState("unsaved");
-        }
-      },
-      onError: (_error, variables) => {
-        if (variables.key === activeKeyRef.current) setSaveState("error");
-      },
-    },
-  );
-
-  useEffect(() => {
-    if (
-      !dirty ||
-      !draft ||
-      !activeKey ||
-      saveMutation.isLoading ||
-      saveState === "error"
-    ) {
-      return;
-    }
-    const timer = window.setTimeout(
-      () =>
-        saveMutation.mutate({
-          curriculumId: selectedId,
-          key: activeKey,
-          version: editVersion.current,
-          data: draft,
-        }),
-      700,
-    );
-    return () => window.clearTimeout(timer);
-  }, [activeKey, dirty, draft, saveMutation, saveState, selectedId]);
-
-  const updateDraft = (
-    changes:
-      | Partial<LessonCurriculumWeek>
-      | ((current: LessonCurriculumWeek) => LessonCurriculumWeek),
-  ) => {
-    setDraft((current) => {
-      if (!current) return current;
-      const next =
-        typeof changes === "function"
-          ? changes(current)
-          : { ...current, ...changes };
-      editVersion.current += 1;
-      setDirty(true);
-      setSaveState("unsaved");
-      if (activeKey) saveLessonNoteDraft(activeKey, next).catch(() => undefined);
-      return next;
-    });
-  };
+    if (currentRevision && currentRevision !== weekQuery.data?.revision) refetchWeek();
+  }, [currentRevision, weekQuery.data?.revision, refetchWeek]);
 
   const createMutation = useMutation(api.createLessonCurriculum, {
     onSuccess: async (created) => {
@@ -258,10 +140,7 @@ function LessonNotes() {
   const replaceMutation = useMutation(api.replaceLessonCurriculumWeeks, {
     onSuccess: async (replaced) => {
       await clearCurriculumDrafts(replaced.id);
-      loadedKey.current = "";
-      setDraft(undefined);
-      setDirty(false);
-      setSaveState("saved");
+      sync.forget();
       setManageDialog(null);
       setReplaceSourceId("");
       await refreshAfterAction(replaced.id);
@@ -280,9 +159,7 @@ function LessonNotes() {
       queryClient.removeQueries(["lessonCurriculumWeek", result.id]);
       setSelectedId("");
       setSelectedWeek(1);
-      setDraft(undefined);
-      setDirty(false);
-      setSaveState("saved");
+      sync.forget();
       setManageDialog(null);
       setDeleteConfirmed(false);
       await Promise.all([
@@ -397,32 +274,26 @@ function LessonNotes() {
 
   const chooseWeek = (curriculumId: string, week: number) => {
     setMenuCurriculumId(null);
-    setFocusNotebook(true);
-    if (curriculumId === selectedId && week === selectedWeek) return;
-    loadedKey.current = "";
+    if (curriculumId === selectedId && week === selectedWeek) { setFocusNotebook(true); return; }
     setSelectedId(curriculumId);
     setSelectedWeek(week);
-    setDraft(undefined);
-    setDirty(false);
-    setSaveState("saved");
+    setFocusNotebook(true);
+
   };
 
   useEffect(() => {
-    if (!focusNotebook || !detailQuery.data || !draft) return;
+    if (!focusNotebook || menuCurriculumId !== null || !detailQuery.data || !draft || draft.week !== selectedWeek) return;
     notebookTitleRef.current?.focus({ preventScroll: true });
     setFocusNotebook(false);
-  }, [focusNotebook, detailQuery.data, draft]);
+  }, [focusNotebook, menuCurriculumId, selectedWeek, detailQuery.data, draft]);
 
-  useEffect(() => {
-    setTextFieldsOpen(false);
-  }, [activeKey]);
 
   const saveLabel = {
     saved: "저장 완료",
     unsaved: "저장 대기",
     saving: "저장 중...",
     error: "저장 실패",
-    recovered: "미저장 내용 복구",
+    conflict: "충돌 확인",
   }[saveState];
 
   return (
@@ -590,76 +461,27 @@ function LessonNotes() {
             <>
               {draft ? (
                 <div className="notebook-page">
-                  <div className="notebook-page-heading">
-                    <h2 ref={notebookTitleRef} tabIndex={-1}>
-                      <b>{selectedWeek}주차</b> <span>공통 수업 기록</span>
-                    </h2>
-                    <div className="notebook-page-actions">
-                      {saveState === "error" ? (
-                        <button
-                          className="button secondary"
-                          type="button"
-                          onClick={() => setSaveState("unsaved")}
-                        >
-                          <FiRefreshCw /> 저장 재시도
-                        </button>
-                      ) : null}
-                      <button
-                        className="button secondary"
-                        type="button"
-                        aria-expanded={textFieldsOpen}
-                        aria-controls="note-text-fields"
-                        onClick={() => setTextFieldsOpen((current) => !current)}
-                      >
-                        키보드 입력 {textFieldsOpen ? "닫기" : "열기"}
-                      </button>
-                    </div>
+                  <div className="notebook-inline-fields" onCompositionStart={() => sync.composition(true)} onCompositionEnd={() => sync.composition(false)}>
+                    <h2 ref={notebookTitleRef} tabIndex={-1}>{selectedWeek}주차</h2>
+                    <input aria-label={`${selectedWeek}주차 공통 수업명`} placeholder="수업명" value={draft.className} onChange={event => updateDraft({className: event.target.value})} />
+                    <textarea aria-label={`${selectedWeek}주차 공통 수업할 내용`} placeholder="수업내용" rows={2} value={draft.content} onChange={event => updateDraft({content: event.target.value})} />
                   </div>
-                  <div id="note-text-fields" className="note-text-fields" hidden={!textFieldsOpen}>
-                    <div className="note-text-grid">
-                      <label>
-                        <span>수업명 <small>계획서 반영</small></span>
-                        <input
-                          aria-label={`${selectedWeek}주차 공통 수업명`}
-                          value={draft.className}
-                          onChange={(event) => updateDraft({ className: event.target.value })}
-                        />
-                      </label>
-                      <label>
-                        <span>수업할 내용 <small>계획서 반영</small></span>
-                        <textarea
-                          aria-label={`${selectedWeek}주차 공통 수업할 내용`}
-                          rows={3}
-                          value={draft.content}
-                          onChange={(event) => updateDraft({ content: event.target.value })}
-                        />
-                      </label>
-                      <label>
-                        <span>진행 플랜 <small>노트 전용</small></span>
-                        <textarea
-                          aria-label={`${selectedWeek}주차 진행 플랜`}
-                          rows={3}
-                          value={draft.lessonPlan}
-                          onChange={(event) => updateDraft({ lessonPlan: event.target.value })}
-                        />
-                      </label>
-                      <label>
-                        <span>사용 교구 <small>노트 전용</small></span>
-                        <textarea
-                          aria-label={`${selectedWeek}주차 사용 교구`}
-                          rows={3}
-                          value={draft.materials}
-                          onChange={(event) => updateDraft({ materials: event.target.value })}
-                        />
-                      </label>
-                    </div>
-                  </div>
-                  <div className="ink-boundary-note">
-                    자유 필기는 수업노트에만 저장되며 강의계획서와 DOCX에는 표시되지 않습니다.
-                  </div>
+                  {sync.error ? <div role="alert">{sync.error} <button className="button secondary" onClick={sync.retry}><FiRefreshCw /> 저장 재시도</button></div> : null}
+                  {sync.conflicts.length ? <section className="note-conflicts" aria-label="충돌 확인">
+                    <strong>충돌 확인</strong>
+                    {sync.conflicts.map(conflict => <div key={conflict.id} className="note-conflict">
+                      <b>{conflict.label}</b>
+                      {(["local", "server"] as const).map(side => <div key={side}>
+                        {typeof conflict[side] === "string" ? <pre>{conflict[side] as string || "(빈 내용)"}</pre> : conflict[side] ? <svg viewBox="0 0 1 1" aria-label={`${side === "local" ? "이 장비" : "서버"} 필기 미리보기`}><polyline fill="none" stroke="currentColor" strokeWidth="0.005" points={(conflict[side] as import("../types").InkStrokeV2).points.map(p => `${p[0]},${p[1]}`).join(" ")} /></svg> : <p>삭제된 획</p>}
+                        <button className="button secondary" onClick={() => sync.resolve(conflict, side)}>{side === "local" ? "이 장비 내용" : "서버 내용"}</button>
+                      </div>)}
+                    </div>)}
+                  </section> : null}
                   <InkCanvas
                     className="notebook-ink-editor"
                     key={activeKey}
+                    historyResetKey={sync.resetKey}
+                    onInteractionChange={sync.interaction}
                     document={draft.inkDocument}
                     onChange={(inkDocument) => updateDraft({ inkDocument })}
                   />
@@ -715,7 +537,7 @@ function LessonNotes() {
             </header>
             <p>
               연결된 장소 {detailQuery.data.linkedPlanCount}곳의 수업명과 내용이
-              즉시 바뀝니다. 기존 필기·진행 플랜·사용 교구는 유지됩니다.
+              즉시 바뀝니다. 기존 필기는 유지됩니다.
             </p>
             <label className="curriculum-action-source">
               <span>가져올 12주</span>
@@ -727,7 +549,7 @@ function LessonNotes() {
               >
                 <option value="">원본을 선택하세요</option>
                 <option value={EMPTY_REPLACEMENT}>
-                  수업명·내용 비우기 (필기·플랜·교구 유지)
+                  수업명·내용 비우기 (필기 유지)
                 </option>
                 {replacementPlans.map((plan) => (
                   <option key={plan.id} value={plan.id}>
@@ -785,7 +607,7 @@ function LessonNotes() {
             </div>
             <p>
               연결된 장소에는 현재 수업명·내용을 복사한 뒤 연결을 해제합니다.
-              공통 원본의 필기·진행 플랜·사용 교구는 영구 삭제됩니다.
+              공통 원본의 필기는 영구 삭제됩니다.
             </p>
             <label className="curriculum-delete-confirm">
               <input

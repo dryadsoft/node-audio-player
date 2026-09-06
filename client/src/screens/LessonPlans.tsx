@@ -468,9 +468,7 @@ function LessonPlans() {
     <main className="app-shell lesson-shell">
       <AppNavigation />
 
-      <header className="compact-header">
-        <h1>강의계획서</h1>
-      </header>
+
 
       <section className="lesson-toolbar" aria-label="강의계획서 검색 조건">
         <label>

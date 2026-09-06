@@ -13,6 +13,10 @@ import {
   SavedPlaylist,
 } from "../types";
 
+export class ApiError extends Error {
+  constructor(message: string, public status: number) { super(message); }
+}
+
 const request = async <T>(url: string, options?: RequestInit): Promise<T> => {
   const response = await fetch(url, {
     ...options,
@@ -24,7 +28,7 @@ const request = async <T>(url: string, options?: RequestInit): Promise<T> => {
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
-    throw new Error(payload?.message || "요청을 처리하지 못했습니다.");
+    throw new ApiError(payload?.message || "요청을 처리하지 못했습니다.", response.status);
   }
 
   if (response.status === 204) {
@@ -149,8 +153,6 @@ export const api = {
         body: JSON.stringify({
           className: input.className,
           content: input.content,
-          lessonPlan: input.lessonPlan,
-          materials: input.materials,
           inkDocument: input.inkDocument,
           expectedRevision: input.revision,
         }),

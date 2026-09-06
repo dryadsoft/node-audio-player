@@ -278,10 +278,10 @@ describe('AppController (e2e)', () => {
       })
       .expect(200)
       .expect((response) => {
+        expect(response.body).not.toHaveProperty('lessonPlan');
+        expect(response.body).not.toHaveProperty('materials');
         expect(response.body).toMatchObject({
           className: '가을 열매 놀이',
-          lessonPlan: '인사 후 열매 탐색',
-          materials: '도토리, 바구니',
           hasInk: true,
           revision: 2,
           inkDocument: {
@@ -340,8 +340,6 @@ describe('AppController (e2e)', () => {
         expect(response.body).toMatchObject({
           className: '1주 수업',
           content: '1주 내용',
-          lessonPlan: '인사 후 열매 탐색',
-          materials: '도토리, 바구니',
           hasInk: true,
         });
       });

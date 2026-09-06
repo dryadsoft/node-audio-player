@@ -30,8 +30,6 @@ export interface LessonCurriculumWeekSummary {
   week: number;
   className: string;
   content: string;
-  lessonPlan: string;
-  materials: string;
   hasInk: boolean;
   revision: number;
   updatedAt: string;

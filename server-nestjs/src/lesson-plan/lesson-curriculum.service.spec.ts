@@ -60,8 +60,6 @@ describe('LessonCurriculumService', () => {
     expect(curricula.getWeek(curriculum.id, 1)).toMatchObject({
       className: '1주 수업',
       content: '1주 내용',
-      lessonPlan: '',
-      materials: '',
       hasInk: false,
       revision: 1,
     });
@@ -95,8 +93,6 @@ describe('LessonCurriculumService', () => {
     const updatedWeek = curricula.updateWeek(curriculum.id, 1, {
       className: '눈 놀이',
       content: '겨울 감각을 느낍니다.',
-      lessonPlan: '인사 후 눈 촉감 놀이',
-      materials: '솜, 흰 천',
       inkDocument: {
         version: 1,
         aspectRatio: 4 / 3,
@@ -152,8 +148,6 @@ describe('LessonCurriculumService', () => {
       curricula.updateWeek(curriculum.id, 1, {
         className: '',
         content: '',
-        lessonPlan: '',
-        materials: '',
         inkDocument: {
           version: 1,
           aspectRatio: 4 / 3,
@@ -191,8 +185,6 @@ describe('LessonCurriculumService', () => {
     const updated = curricula.updateWeek(curriculum.id, 1, {
       className: '',
       content: '',
-      lessonPlan: '',
-      materials: '',
       inkDocument: {
         version: 2,
         aspectRatio: 4 / 3,
@@ -280,8 +272,6 @@ describe('LessonCurriculumService', () => {
     const noted = curricula.updateWeek(curriculum.id, 1, {
       className: '이전 수업',
       content: '이전 내용',
-      lessonPlan: '유지할 진행 플랜',
-      materials: '유지할 교구',
       inkDocument: {
         version: 2,
         aspectRatio: 4 / 3,
@@ -316,8 +306,6 @@ describe('LessonCurriculumService', () => {
     expect(firstWeek).toMatchObject({
       className: '새 1주 수업',
       content: '새 1주 내용',
-      lessonPlan: noted.lessonPlan,
-      materials: noted.materials,
       revision: noted.revision + 1,
     });
     expect(firstWeek.inkDocument.strokes).toHaveLength(1);
@@ -333,8 +321,6 @@ describe('LessonCurriculumService', () => {
     });
     expect(cleared.weeks[0]).toMatchObject({ className: '', content: '' });
     expect(curricula.getWeek(curriculum.id, 1)).toMatchObject({
-      lessonPlan: '유지할 진행 플랜',
-      materials: '유지할 교구',
       hasInk: true,
     });
   });
@@ -385,8 +371,6 @@ describe('LessonCurriculumService', () => {
     const updated = curricula.updateWeek(curriculum.id, 1, {
       className: '보존할 수업',
       content: '보존할 내용',
-      lessonPlan: '삭제될 진행 플랜',
-      materials: '삭제될 교구',
       inkDocument: {
         version: 2,
         aspectRatio: 4 / 3,

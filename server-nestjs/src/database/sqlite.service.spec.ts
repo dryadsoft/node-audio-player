@@ -95,7 +95,7 @@ describe('SqliteService migrations', () => {
         sqlite.database
           .prepare('SELECT MAX(version) AS version FROM schema_migrations')
           .get(),
-      ).toEqual({ version: 4 });
+      ).toEqual({ version: 5 });
       expect(
         sqlite.database
           .prepare(
@@ -123,6 +123,70 @@ describe('SqliteService migrations', () => {
           .prepare('SELECT COUNT(*) AS count FROM lesson_curricula')
           .get(),
       ).toEqual({ count: 0 });
+      expect(sqlite.integrityCheck()).toBe(true);
+    } finally {
+      sqlite.onModuleDestroy();
+    }
+  });
+  it('migrates v4 preserving ink, revisions and plan links; new databases omit only retired columns', () => {
+    let sqlite = new SqliteService();
+    sqlite.onModuleInit();
+    const db = sqlite.database;
+    const columns = () =>
+      sqlite.database
+        .prepare('PRAGMA table_info(lesson_curriculum_weeks)')
+        .all()
+        .map((row: { name: string }) => row.name);
+    expect(columns()).toEqual([
+      'curriculum_id',
+      'week',
+      'class_name',
+      'content',
+      'ink_json',
+      'revision',
+      'updated_at',
+    ]);
+    db.exec(`
+      ALTER TABLE lesson_curriculum_weeks ADD COLUMN lesson_plan TEXT NOT NULL DEFAULT '';
+      ALTER TABLE lesson_curriculum_weeks ADD COLUMN materials TEXT NOT NULL DEFAULT '';
+      DELETE FROM schema_migrations WHERE version = 5;
+      INSERT INTO lesson_curricula VALUES ('c',2026,'fall','수업','수업','t','t');
+      INSERT INTO lesson_locations VALUES ('loc','장소','장소',1,'t','t');
+      INSERT INTO lesson_plans (id,year,term,location_id,program_name,revision,created_at,updated_at,curriculum_id)
+        VALUES ('plan',2026,'fall','loc','수업',3,'t','t','c');
+      INSERT INTO lesson_weeks VALUES ('plan',1,'계획서','연결 유지');
+      INSERT INTO lesson_curriculum_weeks (curriculum_id,week,class_name,content,ink_json,revision,updated_at,lesson_plan,materials)
+      VALUES ('c',1,'이름','내용','{"version":2,"pageCount":2,"aspectRatio":1.3,"strokes":[{"id":"keep"}]}',7,'t','삭제','삭제');
+    `);
+    const before = db
+      .prepare(
+        'SELECT curriculum_id,week,class_name,content,ink_json,revision,updated_at FROM lesson_curriculum_weeks',
+      )
+      .all();
+    sqlite.onModuleDestroy();
+    sqlite = new SqliteService();
+    sqlite.onModuleInit();
+    try {
+      expect(columns()).not.toContain('lesson_plan');
+      expect(columns()).not.toContain('materials');
+      expect(
+        sqlite.database.prepare('SELECT * FROM lesson_curriculum_weeks').all(),
+      ).toEqual(before);
+      expect(
+        sqlite.database
+          .prepare(
+            "SELECT curriculum_id,revision FROM lesson_plans WHERE id='plan'",
+          )
+          .get(),
+      ).toEqual({ curriculum_id: 'c', revision: 3 });
+      expect(
+        sqlite.database
+          .prepare("SELECT content FROM lesson_weeks WHERE plan_id='plan'")
+          .get(),
+      ).toEqual({ content: '연결 유지' });
+      expect(sqlite.database.prepare('PRAGMA foreign_key_check').all()).toEqual(
+        [],
+      );
       expect(sqlite.integrityCheck()).toBe(true);
     } finally {
       sqlite.onModuleDestroy();
