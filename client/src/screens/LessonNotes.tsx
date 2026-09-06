@@ -405,13 +405,8 @@ function LessonNotes() {
   return (
     <main className="app-shell lesson-shell notes-shell">
       <AppNavigation />
-      <header className="lesson-hero notes-hero">
-        <div className="lesson-hero-mark" aria-hidden="true">✎</div>
-        <div>
-          <span className="eyebrow">SHARED 12-WEEK NOTEBOOK</span>
-          <h1>공통 수업노트</h1>
-          <p>한 번 작성한 수업명과 내용을 모든 연결 장소에서 함께 씁니다.</p>
-        </div>
+      <header className="compact-header">
+        <h1>공통 수업노트</h1>
         <button
           className="button accent"
           type="button"
@@ -638,6 +633,7 @@ function LessonNotes() {
                     자유 필기는 수업노트에만 저장되며 강의계획서와 DOCX에는 표시되지 않습니다.
                   </div>
                   <InkCanvas
+                    className="notebook-ink-editor"
                     key={activeKey}
                     document={draft.inkDocument}
                     onChange={(inkDocument) => updateDraft({ inkDocument })}

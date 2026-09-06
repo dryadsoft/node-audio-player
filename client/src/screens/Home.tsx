@@ -371,14 +371,8 @@ function Home() {
     >
       <main className="app-shell">
         <AppNavigation />
-        <header className="player-header">
-          <div className="brand-block">
-            <span className="brand-mark">OG</span>
-            <div>
-              <span className="eyebrow">MUSIC LIBRARY</span>
-              <h1>오감별 음악</h1>
-            </div>
-          </div>
+        <header className="compact-header player-header">
+          <h1>오감별 음악</h1>
           <div className="player-block">
             <Player track={playingTrack} />
           </div>

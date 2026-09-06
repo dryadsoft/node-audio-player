@@ -114,26 +114,40 @@ textarea:focus-visible {
 }
 
 .app-shell {
-  min-height: 100vh;
-  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100dvh;
+  min-height: 0;
+  padding: 12px;
+}
+
+.app-shell > * {
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.compact-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(var(--panel-rgb), 0.92);
+}
+
+.compact-header h1 {
+  flex-shrink: 0;
+  font-size: 1.25rem;
+  line-height: 1.4;
 }
 
 .player-header {
-  display: grid;
-  grid-template-columns: minmax(260px, 0.7fr) minmax(420px, 1.3fr);
-  gap: 24px;
-  align-items: center;
-  max-width: 1500px;
-  margin: 0 auto 18px;
-  padding: 18px 22px;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  background: rgba(var(--panel-rgb), 0.92);
-  box-shadow: 0 24px 60px rgba(var(--shadow-rgb), 0.28);
-  backdrop-filter: blur(16px);
+  justify-content: flex-start;
 }
 
-.brand-block,
 .player-block,
 .panel-heading,
 .selected-playlist-heading,
@@ -143,23 +157,6 @@ textarea:focus-visible {
 .dialog-actions {
   display: flex;
   align-items: center;
-}
-
-.brand-block {
-  gap: 14px;
-}
-
-.brand-mark {
-  display: grid;
-  width: 48px;
-  height: 48px;
-  place-items: center;
-  border: 1px solid var(--accent);
-  border-radius: 50%;
-  color: var(--accent);
-  font-family: Georgia, serif;
-  font-weight: 700;
-  letter-spacing: -0.06em;
 }
 
 .eyebrow {
@@ -194,19 +191,21 @@ h2 {
 
 .player-block {
   min-width: 0;
-  gap: 18px;
+  flex: 1;
+  gap: 8px;
   justify-content: flex-end;
 }
 
 .player-controls audio {
   display: block;
-  width: min(360px, 42vw);
+  width: 300px;
   height: 38px;
 }
 
 .now-playing {
   min-width: 0;
-  max-width: 320px;
+  flex: 1;
+  max-width: 420px;
   color: var(--muted);
   font-size: 0.9rem;
   overflow: hidden;
@@ -224,12 +223,10 @@ h2 {
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(360px, 0.92fr) minmax(520px, 1.08fr);
-  gap: 18px;
-  max-width: 1500px;
-  height: calc(100vh - 204px);
-  min-height: 520px;
-  margin: 0 auto;
+  grid-template-columns: minmax(300px, 0.92fr) minmax(480px, 1.08fr);
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
 }
 
 .library-panel,
@@ -877,17 +874,17 @@ textarea {
 
 @media (max-width: 900px) {
   .app-shell {
-    padding: 12px;
+    height: auto;
+    min-height: 100dvh;
+    padding: 8px;
   }
 
   .player-header {
-    grid-template-columns: 1fr;
-    gap: 14px;
-    margin-bottom: 10px;
-    padding: 14px;
+    flex-wrap: wrap;
   }
 
   .player-block {
+    flex-basis: 100%;
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: 7px;
@@ -904,10 +901,9 @@ textarea {
 
   .mobile-tabs {
     display: grid;
-    max-width: 1500px;
     grid-template-columns: 1fr 1fr;
     gap: 4px;
-    margin: 0 auto 10px;
+    margin: 0;
     padding: 4px;
     border: 1px solid var(--line);
     border-radius: 12px;
@@ -931,14 +927,14 @@ textarea {
 
   .workspace {
     display: block;
-    height: calc(100vh - 278px);
-    min-height: 420px;
+    flex: auto;
+    min-height: 0;
   }
 
   .library-panel,
   .playlist-column {
     display: none;
-    height: 100%;
+    height: auto;
   }
 
   .library-panel.mobile-active {
@@ -998,10 +994,6 @@ textarea {
 }
 
 @media (max-width: 520px) {
-  .brand-mark {
-    width: 42px;
-    height: 42px;
-  }
 
   .panel-heading {
     align-items: flex-end;
@@ -1063,11 +1055,10 @@ textarea {
 
 .app-navigation {
   display: flex;
-  max-width: 1500px;
   align-items: center;
   justify-content: flex-end;
   gap: 5px;
-  margin: 0 auto 10px;
+  margin: 0;
   padding: 4px;
   border: 1px solid rgba(var(--line-rgb), 0.78);
   border-radius: 12px;
@@ -1141,100 +1132,22 @@ textarea {
   --summer: #f0b441;
   --fall: #d77846;
   --winter: #8eb5ca;
-  min-height: 100vh;
 }
 
-.lesson-hero,
-.lesson-toolbar,
-.lesson-workspace {
-  max-width: 1500px;
-  margin-inline: auto;
-}
-
-.lesson-hero {
-  position: relative;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 18px;
-  align-items: center;
-  margin-bottom: 12px;
-  padding: 22px 26px;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  background:
-    linear-gradient(110deg, rgba(var(--accent-rgb), 0.12), transparent 38%),
-    repeating-linear-gradient(
-      90deg,
-      transparent 0,
-      transparent 47px,
-      rgba(var(--texture-rgb), 0.018) 48px
-    ),
-    rgba(var(--panel-rgb), 0.95);
-  box-shadow: 0 24px 60px rgba(var(--shadow-rgb), 0.25);
-}
-
-.lesson-hero::after {
-  position: absolute;
-  right: 16%;
-  bottom: -34px;
-  width: 190px;
-  height: 70px;
-  border: 1px solid rgba(var(--accent-rgb), 0.22);
-  border-radius: 50%;
-  content: "";
-  transform: rotate(-8deg);
-}
-
-.lesson-hero-mark {
-  display: grid;
-  width: 62px;
-  height: 62px;
-  place-items: center;
-  border: 1px solid var(--accent);
-  border-radius: 14px 14px 30px 14px;
-  color: var(--accent);
-  font-family: Georgia, serif;
-  font-size: 1.65rem;
-  font-weight: 700;
-}
-
-.lesson-hero p,
 .sheet-heading p {
   margin-top: 4px;
   color: var(--muted);
   font-size: 0.82rem;
 }
 
-.annual-meter {
-  z-index: 1;
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
-  color: var(--muted);
-}
-
-.annual-meter strong {
-  color: var(--accent);
-  font-family: Georgia, serif;
-  font-size: 2rem;
-}
-
-.annual-meter span {
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-}
-
 .lesson-toolbar {
   display: grid;
   grid-template-columns:
-    130px 150px minmax(170px, 1fr) minmax(150px, 0.8fr)
+    100px 110px minmax(0, 1fr) minmax(0, 0.8fr)
     auto;
   gap: 10px;
   align-items: end;
-  margin-bottom: 12px;
-  padding: 12px 14px;
+  padding: 8px;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: rgba(var(--panel-rgb), 0.88);
@@ -1266,10 +1179,10 @@ textarea {
 
 .lesson-workspace {
   display: grid;
-  min-height: 600px;
-  height: calc(100vh - 264px);
+  flex: 1;
+  min-height: 0;
   grid-template-columns: minmax(255px, 0.27fr) minmax(0, 0.73fr);
-  gap: 12px;
+  gap: 8px;
 }
 
 .plan-browser,
@@ -1810,13 +1723,6 @@ textarea {
     flex: 1;
     justify-content: center;
   }
-  .lesson-hero {
-    grid-template-columns: auto 1fr;
-    padding: 16px;
-  }
-  .annual-meter {
-    display: none;
-  }
   .lesson-toolbar {
     grid-template-columns: 1fr 1fr;
   }
@@ -1833,7 +1739,7 @@ textarea {
   }
   .plan-browser {
     max-height: 320px;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
   }
   .plan-sheet {
     min-height: 440px;
@@ -1906,20 +1812,6 @@ textarea {
   .theme-toggle span {
     display: none;
   }
-  .lesson-hero-mark {
-    width: 50px;
-    height: 50px;
-    font-size: 1.35rem;
-  }
-  .lesson-hero p {
-    display: none;
-  }
-  .lesson-toolbar {
-    grid-template-columns: 1fr;
-  }
-  .lesson-toolbar-actions {
-    grid-column: auto;
-  }
   .sheet-heading {
     flex-direction: column;
   }
@@ -1961,9 +1853,6 @@ textarea {
   }
 }
 
-.notes-hero {
-  grid-template-columns: auto minmax(0, 1fr) auto;
-}
 
 .notes-shell {
   -webkit-user-select: none;
@@ -1978,11 +1867,10 @@ textarea {
 
 .curriculum-create {
   display: grid;
-  max-width: 1500px;
-  grid-template-columns: 120px 150px minmax(180px, 0.8fr) minmax(240px, 1.2fr) auto;
+  grid-template-columns: 90px 100px minmax(0, 0.8fr) minmax(0, 1.2fr) auto;
   gap: 10px;
   align-items: end;
-  margin: 0 auto 12px;
+  margin: 0;
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -2019,12 +1907,10 @@ textarea {
 
 .notes-workspace {
   display: grid;
-  max-width: 1500px;
-  min-height: 650px;
-  height: calc(100vh - 184px);
+  flex: 1;
+  min-height: 0;
   grid-template-columns: minmax(245px, 0.22fr) minmax(0, 0.78fr);
-  gap: 12px;
-  margin-inline: auto;
+  gap: 8px;
 }
 
 .curriculum-browser,
@@ -2096,8 +1982,7 @@ textarea {
 }
 
 .curriculum-action-notice {
-  max-width: 1500px;
-  margin: 0 auto 12px;
+  margin: 0;
   padding: 9px 12px;
   border: 1px solid rgba(var(--accent-rgb), 0.28);
   border-radius: 10px;
@@ -2311,12 +2196,6 @@ textarea {
 }
 
 @media (max-width: 900px) {
-  .notes-hero {
-    grid-template-columns: auto 1fr;
-  }
-  .notes-hero > .button {
-    grid-column: 1 / -1;
-  }
   .curriculum-create {
     grid-template-columns: 1fr 1fr;
   }
@@ -2330,10 +2209,10 @@ textarea {
   }
   .curriculum-browser {
     max-height: 240px;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
   }
   .notebook-sheet {
-    min-height: 620px;
+    min-height: 0;
   }
   .note-text-grid {
     grid-template-columns: 1fr 1fr;
@@ -2360,5 +2239,91 @@ textarea {
   .notebook-heading-actions {
     width: 100%;
     justify-content: flex-start;
+  }
+}
+
+/* Let content shrink within desktop grids without widening the page. */
+.workspace > *,
+.lesson-workspace > *,
+.notes-workspace > *,
+.lesson-toolbar label,
+.curriculum-create label,
+.notebook-heading > div {
+  min-width: 0;
+}
+
+.lesson-toolbar,
+.curriculum-create {
+  gap: 8px;
+}
+
+.notebook-heading {
+  flex-wrap: wrap;
+}
+
+.notebook-heading h2,
+.curriculum-card,
+.sheet-heading h2 {
+  overflow-wrap: anywhere;
+}
+
+.playlist-sidebar {
+  overflow-y: auto;
+}
+
+@media (min-width: 901px) and (min-height: 601px) {
+  .notebook-sheet,
+  .notebook-page {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .notebook-sheet > *,
+  .notebook-page > * {
+    flex-shrink: 0;
+  }
+
+  .notebook-page {
+    flex: 1 0 auto;
+  }
+
+  .notebook-ink-editor:not(.ink-editor-fullscreen) {
+    flex: 1 0 auto;
+  }
+
+  .notebook-ink-editor:not(.ink-editor-fullscreen) .ink-scroll-viewport {
+    height: auto;
+    min-height: 180px;
+    flex: 1 0 180px;
+  }
+}
+
+/* Short windows and software keyboards must not trap controls off-screen. */
+@media (max-height: 600px) {
+  .app-shell {
+    height: auto;
+    min-height: 100dvh;
+  }
+
+  .workspace,
+  .lesson-workspace,
+  .notes-workspace {
+    flex: auto;
+  }
+}
+
+@media (max-width: 900px) {
+  .compact-header h1 {
+    font-size: 1.125rem;
+  }
+
+  .app-navigation a {
+    gap: 4px;
+    padding-inline: 8px;
+  }
+
+  .lesson-workspace,
+  .notes-workspace {
+    flex: auto;
   }
 }

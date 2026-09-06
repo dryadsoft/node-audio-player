@@ -468,19 +468,8 @@ function LessonPlans() {
     <main className="app-shell lesson-shell">
       <AppNavigation />
 
-      <header className="lesson-hero">
-        <div className="lesson-hero-mark" aria-hidden="true">
-          12
-        </div>
-        <div>
-          <span className="eyebrow">SEASONAL COURSE LEDGER</span>
-          <h1>강의계획서</h1>
-          <p>장소마다 사계절 12주 수업의 흐름을 기록합니다.</p>
-        </div>
-        <div className="annual-meter">
-          <strong>48</strong>
-          <span>주 / 연간 과정</span>
-        </div>
+      <header className="compact-header">
+        <h1>강의계획서</h1>
       </header>
 
       <section className="lesson-toolbar" aria-label="강의계획서 검색 조건">
