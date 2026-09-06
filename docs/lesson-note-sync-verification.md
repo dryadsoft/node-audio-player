@@ -34,4 +34,20 @@ Chrome의 독립 BrowserContext 두 개로 최신 텍스트 반영, 동일 텍�
 
 ## 배포 시 순서
 
-앱 커밋과 Pi 배포는 별도 단계다. 실제 DB 적용 전 기존 DB 경로를 명시해 `npm run db:backup`을 실행하고 성공·백업 경로를 확인한다. 이후 서버와 클라이언트를 함께 갱신하고 v5 스키마 및 API·필기를 확인한다. 이번 작업에서는 실제 DB에 마이그레이션을 적용하지 않았다.
+앱 커밋과 Pi 배포는 별도 단계다. 실제 DB 적용 전 기존 DB 경로를 명시해 `npm run db:backup`을 실행하고 성공·백업 경로를 확인한다. 이후 서버와 클라이언트를 함께 갱신하고 v5 스키마 및 API·필기를 확인한다. 초기 로컬 검증에서는 실제 DB에 마이그레이션을 적용하지 않았다. 이후 승인된 배포 결과는 아래와 같다.
+
+
+## Pi 배포 결과 (2026-09-06 21:04 KST)
+
+- 배포한 앱 커밋: `929490df87efb6a89aca1fc77378f4684adecccb`.
+- 릴리스 경로: `/home/pi/releases/node-audio-player-929490d`.
+- 배포 경로: `/home/pi/workspace/node-audio-player`.
+- 코드·빌드·PM2 설정·DB 백업: `/home/pi/backups/node-audio-player-929490d-20260906-210357`.
+- Pi Node `v22.23.2`에서 별도 릴리스 폴더의 서버 빌드, 단위 테스트 38개, e2e 5개 통과.
+- 기존 백업 명령의 무결성 검사 및 DB 복사본 마이그레이션 후, `nmp`를 중지하고 최종 DB를 다시 백업했다.
+- 실제 DB v5 적용 전후 두 제거 컬럼과 마이그레이션 이력을 제외한 모든 테이블·열·행이 일치했다. 장소 25개, 계획서 216개, 계획서 주차 2,592개, 가져오기 이력 216개, 공통 원본 1개·주차 12개를 보존했다. `integrity_check=ok`, 외래 키 오류 0.
+- 서버·클라이언트를 함께 교체하고 PM2 `nmp` 재시작·프로세스 목록 저장 완료.
+- 배포 후 `/lesson-notes`, `/lesson-plans`, `/api/playlist`, 주차 조회 API HTTP 200. 제거한 필드가 응답에 없고 revision·필기 문서가 유지됨을 확인했다.
+- Nginx가 반환한 HTML·JS·CSS 해시가 배포 파일과 일치했다. 서버 소스·dist 및 클라이언트 소스·build도 검증한 릴리스와 일치했다.
+- 실제 음악 파일 Range 요청 HTTP 206. 공개 `https://music.mcdryad.com/lesson-notes`는 Access 로그인 경로의 HTTP 302.
+- 인증된 공개 브라우저 화면과 실제 iPad/Pencil 입력은 배포 후 별도 검증하지 않았다.
