@@ -3,6 +3,7 @@ import {
   FiAlertTriangle,
   FiBookOpen,
   FiCheck,
+  FiChevronRight,
   FiPlus,
   FiRefreshCw,
   FiRepeat,
@@ -19,6 +20,7 @@ import {
   saveLessonNoteDraft,
 } from "../api/lessonNoteDrafts";
 import AppNavigation from "../components/AppNavigation";
+import LessonWeekDrawer from "../components/LessonWeekDrawer";
 import {
   LessonCurriculum,
   LessonCurriculumSummary,
@@ -55,6 +57,10 @@ function LessonNotes() {
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState("");
   const [selectedWeek, setSelectedWeek] = useState(1);
+  const [menuCurriculumId, setMenuCurriculumId] = useState<string | null>(null);
+  const [focusNotebook, setFocusNotebook] = useState(false);
+  const curriculumBrowserRef = useRef<HTMLElement>(null);
+  const notebookTitleRef = useRef<HTMLHeadingElement>(null);
   const [creating, setCreating] = useState(false);
   const [createYear, setCreateYear] = useState(currentYear);
   const [createTerm, setCreateTerm] = useState<LessonTerm>("spring");
@@ -172,7 +178,9 @@ function LessonNotes() {
           setSaveState("unsaved");
         }
       },
-      onError: () => setSaveState("error"),
+      onError: (_error, variables) => {
+        if (variables.key === activeKeyRef.current) setSaveState("error");
+      },
     },
   );
 
@@ -386,13 +394,23 @@ function LessonNotes() {
     });
   };
 
-  const chooseWeek = (week: number) => {
+  const chooseWeek = (curriculumId: string, week: number) => {
+    setMenuCurriculumId(null);
+    setFocusNotebook(true);
+    if (curriculumId === selectedId && week === selectedWeek) return;
     loadedKey.current = "";
+    setSelectedId(curriculumId);
     setSelectedWeek(week);
     setDraft(undefined);
     setDirty(false);
     setSaveState("saved");
   };
+
+  useEffect(() => {
+    if (!focusNotebook || !detailQuery.data || !draft) return;
+    notebookTitleRef.current?.focus({ preventScroll: true });
+    setFocusNotebook(false);
+  }, [focusNotebook, detailQuery.data, draft]);
 
   const saveLabel = {
     saved: "저장 완료",
@@ -498,8 +516,19 @@ function LessonNotes() {
         </p>
       ) : null}
 
+      <button
+        className="button secondary notes-menu-trigger"
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={menuCurriculumId !== null}
+        aria-controls="lesson-week-drawer"
+        onClick={() => setMenuCurriculumId("")}
+      >
+        <FiBookOpen aria-hidden="true" /> 학기·주차 선택
+      </button>
+
       <div className="notes-workspace">
-        <aside className="curriculum-browser" aria-label="공통 수업노트 목록">
+        <aside className="curriculum-browser" aria-label="공통 수업노트 목록" ref={curriculumBrowserRef}>
           <div className="plan-browser-heading">
             <span>공통 원본</span>
             <strong>{curricula.length}</strong>
@@ -509,13 +538,12 @@ function LessonNotes() {
               type="button"
               key={item.id}
               className={`curriculum-card ${selectedId === item.id ? "active" : ""}`}
-              onClick={() => {
-                loadedKey.current = "";
-                setSelectedId(item.id);
-                chooseWeek(1);
-              }}
+              aria-haspopup="dialog"
+              aria-expanded={menuCurriculumId === item.id}
+              aria-controls="lesson-week-drawer"
+              onClick={() => setMenuCurriculumId(item.id)}
             >
-              <b>{item.year}년 {TERM_LABELS[item.term]}</b>
+              <b>{item.year}년 {TERM_LABELS[item.term]} <FiChevronRight aria-hidden="true" /></b>
               <span>{item.programName}</span>
               <small>{item.completedWeeks}/12 작성 · 장소 {item.linkedPlanCount}곳 연결</small>
             </button>
@@ -535,7 +563,7 @@ function LessonNotes() {
               <header className="notebook-heading">
                 <div>
                   <span className="eyebrow">{detailQuery.data.year} SHARED COURSE</span>
-                  <h2>{TERM_LABELS[detailQuery.data.term]} · {detailQuery.data.programName}</h2>
+                  <h2 ref={notebookTitleRef} tabIndex={-1}>{TERM_LABELS[detailQuery.data.term]} · {detailQuery.data.programName}</h2>
                 </div>
                 <div className="notebook-heading-actions">
                   <span className={`save-indicator ${saveState}`} role="status">
@@ -559,22 +587,6 @@ function LessonNotes() {
                   </button>
                 </div>
               </header>
-              <nav className="week-tabs" aria-label="주차 선택">
-                {detailQuery.data.weeks.map((week) => (
-                  <button
-                    type="button"
-                    key={week.week}
-                    className={`${selectedWeek === week.week ? "active" : ""} ${
-                      week.hasInk || week.className || week.content || week.lessonPlan || week.materials
-                        ? "filled"
-                        : ""
-                    }`}
-                    onClick={() => chooseWeek(week.week)}
-                  >
-                    <b>{week.week}</b><span>주차</span>
-                  </button>
-                ))}
-              </nav>
               {draft ? (
                 <div className="notebook-page">
                   <div className="notebook-page-heading">
@@ -653,6 +665,18 @@ function LessonNotes() {
           )}
         </section>
       </div>
+
+      {menuCurriculumId !== null ? (
+        <LessonWeekDrawer
+          initialCurriculumId={menuCurriculumId}
+          curricula={curricula}
+          selectedId={selectedId}
+          selectedWeek={selectedWeek}
+          anchorRef={curriculumBrowserRef}
+          onClose={() => setMenuCurriculumId(null)}
+          onSelect={chooseWeek}
+        />
+      ) : null}
 
       {manageDialog === "replace" && detailQuery.data ? (
         <div className="modal-backdrop" role="presentation">

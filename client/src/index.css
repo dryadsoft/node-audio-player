@@ -2087,54 +2087,6 @@ textarea {
   color: var(--danger);
 }
 
-.week-tabs {
-  display: grid;
-  grid-template-columns: repeat(12, minmax(54px, 1fr));
-  gap: 6px;
-  margin: 16px 0;
-  overflow-x: auto;
-  padding-bottom: 4px;
-}
-
-.week-tabs button {
-  display: flex;
-  min-width: 54px;
-  min-height: 52px;
-  align-items: baseline;
-  justify-content: center;
-  gap: 3px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--row);
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.week-tabs button.filled::after {
-  width: 5px;
-  height: 5px;
-  align-self: center;
-  border-radius: 50%;
-  background: var(--success);
-  content: "";
-}
-
-.week-tabs button.active {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-}
-
-.week-tabs button b {
-  font-family: Georgia, serif;
-  font-size: 1.08rem;
-}
-
-.week-tabs button span {
-  font-size: 0.62rem;
-  font-weight: 800;
-}
-
 .notebook-page {
   padding: 14px;
   border: 1px solid var(--line);
@@ -2208,8 +2160,7 @@ textarea {
     height: auto;
   }
   .curriculum-browser {
-    max-height: 240px;
-    margin-bottom: 8px;
+    display: none;
   }
   .notebook-sheet {
     min-height: 0;
@@ -2258,6 +2209,7 @@ textarea {
 }
 
 .notebook-heading {
+  margin-bottom: 8px;
   flex-wrap: wrap;
 }
 
@@ -2325,5 +2277,173 @@ textarea {
   .lesson-workspace,
   .notes-workspace {
     flex: auto;
+  }
+}
+
+.notes-menu-trigger {
+  display: none;
+}
+
+.curriculum-card b {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.curriculum-card b svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.lesson-drawer-backdrop {
+  position: fixed;
+  z-index: 900;
+  inset: 0;
+  background: rgba(var(--overlay-rgb), 0.35);
+}
+
+.lesson-week-drawer {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  width: min(280px, calc(100vw - 16px));
+  min-height: 0;
+  padding: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 16px 40px rgba(var(--shadow-rgb), 0.35);
+  animation: lesson-menu-slide 200ms ease-out;
+}
+
+.lesson-drawer-heading {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.lesson-drawer-heading > div {
+  min-width: 0;
+}
+
+.lesson-drawer-heading h2 {
+  font-size: 1.1rem;
+}
+
+.lesson-drawer-heading p {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.lesson-drawer-heading button {
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.lesson-drawer-back {
+  display: none;
+  min-height: 44px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.lesson-drawer-list {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px 2px 2px;
+  animation: lesson-menu-slide 200ms ease-out;
+}
+
+.lesson-drawer-list > button {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  margin-bottom: 6px;
+  padding: 9px 30px 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--row);
+  text-align: left;
+}
+
+.lesson-drawer-list > button:hover,
+.lesson-drawer-list > button[aria-current="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.lesson-drawer-list b {
+  font-size: 0.85rem;
+}
+
+.lesson-drawer-label {
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.lesson-drawer-filled {
+  position: absolute;
+  top: 14px;
+  right: 10px;
+  color: var(--success);
+}
+
+.lesson-drawer-state {
+  padding: 12px 4px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.lesson-drawer-state .button {
+  margin-top: 12px;
+}
+
+@keyframes lesson-menu-slide {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@media (max-width: 900px) {
+  .notes-menu-trigger,
+  .lesson-drawer-back {
+    display: flex;
+  }
+
+  .notes-menu-trigger {
+    align-self: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lesson-week-drawer,
+  .lesson-drawer-list {
+    animation: none;
   }
 }

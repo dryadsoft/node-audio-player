@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "react-query";
 import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "../context/ThemeContext";
@@ -390,4 +390,164 @@ describe("LessonNotes", () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "공통 12주 교체" })).not.toBeInTheDocument();
   });
+
+  const otherSummary = { ...summary, id: "curriculum-2", term: "winter" as const, programName: "겨울 놀이" };
+  const renderNavigation = (detailResponse?: () => Promise<Response>) => {
+    const draftStore = new Map<string, LessonCurriculumWeek>();
+    (loadLessonNoteDraft as jest.Mock).mockImplementation((key: string) => Promise.resolve(draftStore.get(key)));
+    (saveLessonNoteDraft as jest.Mock).mockImplementation((key: string, value: LessonCurriculumWeek) => {
+      draftStore.set(key, value);
+      return Promise.resolve();
+    });
+    (clearLessonNoteDraft as jest.Mock).mockImplementation((key: string) => {
+      draftStore.delete(key);
+      return Promise.resolve();
+    });
+    const fetchMock = jest.spyOn(window, "fetch").mockImplementation((input, options) => {
+      const url = String(input);
+      if (url === "/api/lesson-curricula") return jsonResponse([summary, otherSummary]);
+      if (url === "/api/lesson-plans") return jsonResponse([]);
+      if (url === "/api/lesson-curricula/curriculum-1") return jsonResponse({ ...summary, weeks });
+      if (url === "/api/lesson-curricula/curriculum-2") {
+        return detailResponse ? detailResponse() : jsonResponse({ ...otherSummary, weeks });
+      }
+      const match = url.match(/\/lesson-curricula\/(curriculum-\d)\/weeks\/(\d+)$/);
+      if (match) {
+        if (options?.method === "PUT") {
+          const body = JSON.parse(String(options.body));
+          return jsonResponse({ ...body, week: Number(match[2]), revision: 2 });
+        }
+        return jsonResponse(week(Number(match[2])));
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <MemoryRouter><LessonNotes /></MemoryRouter>
+        </ThemeProvider>
+      </QueryClientProvider>,
+    );
+    return { draftStore, fetchMock };
+  };
+
+  const openTerm = (name = "오감별") => {
+    const list = screen.getByRole("complementary", { name: "공통 수업노트 목록" });
+    const trigger = within(list).getByRole("button", { name: new RegExp(name) });
+    trigger.focus();
+    fireEvent.click(trigger);
+    return trigger;
+  };
+
+  it("browses another term without changing the note and only switches after choosing a week", async () => {
+    const { fetchMock } = renderNavigation();
+    await screen.findByLabelText("1주차 공통 수업명");
+    const canvas = screen.getByLabelText("Apple Pencil 필기 영역 1페이지");
+    openTerm("겨울 놀이");
+    const dialog = await screen.findByRole("dialog");
+    const nav = await within(dialog).findByRole("navigation", { name: "주차 선택" });
+    await waitFor(() => expect(within(nav).getAllByRole("button")).toHaveLength(12));
+    expect(screen.getByRole("heading", { name: "가을학기 · 오감별" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Apple Pencil 필기 영역 1페이지")).toBe(canvas);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("curriculum-2/weeks"))).toBe(false);
+    fireEvent.click(within(nav).getByRole("button", { name: "12주차" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(await screen.findByLabelText("12주차 공통 수업명")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("heading", { name: "겨울학기 · 겨울 놀이" })).toHaveFocus());
+  });
+
+  it("closes and reopens the drawer without resetting the current canvas or draft", async () => {
+    renderNavigation();
+    const input = await screen.findByLabelText("1주차 공통 수업명");
+    fireEvent.change(input, { target: { value: "작성 중인 수업" } });
+    const canvas = screen.getByLabelText("Apple Pencil 필기 영역 1페이지");
+    const trigger = openTerm();
+    let dialog = await screen.findByRole("dialog");
+    const firstWeek = await within(dialog).findByRole("button", { name: /^1주차/ });
+    expect(firstWeek).toHaveAttribute("aria-current", "true");
+    expect(firstWeek).toHaveFocus();
+    fireEvent.keyDown(firstWeek, { key: "Escape" });
+    expect(trigger).toHaveFocus();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    openTerm();
+    dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /^1주차/ }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("1주차 공통 수업명")).toHaveValue("작성 중인 수업");
+    expect(screen.getByLabelText("Apple Pencil 필기 영역 1페이지")).toBe(canvas);
+    openTerm();
+    dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "주차 메뉴 닫기" }));
+    expect(trigger).toHaveFocus();
+    openTerm();
+    fireEvent.click(screen.getByRole("dialog").parentElement!);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("restores the unsaved local draft when switching weeks before autosave", async () => {
+    const { draftStore, fetchMock } = renderNavigation();
+    const input = await screen.findByLabelText("1주차 공통 수업명");
+    fireEvent.change(input, { target: { value: "저장 대기 중 전환" } });
+    await waitFor(() => expect(draftStore.get("curriculum-1:1")?.className).toBe("저장 대기 중 전환"));
+    openTerm();
+    const nextWeek = await within(screen.getByRole("dialog")).findByRole("button", { name: "2주차" });
+    await act(async () => { fireEvent.click(nextWeek); });
+    await screen.findByLabelText("2주차 공통 수업명");
+    openTerm();
+    const previousWeek = await within(screen.getByRole("dialog")).findByRole("button", { name: /^1주차/ });
+    await act(async () => { fireEvent.click(previousWeek); });
+    await waitFor(() => expect(screen.getByLabelText("1주차 공통 수업명")).toHaveValue("저장 대기 중 전환"));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url, options]) =>
+      String(url).endsWith("curriculum-1/weeks/1") && options?.method === "PUT" &&
+      JSON.parse(String(options.body)).className === "저장 대기 중 전환",
+    )).toBe(true), { timeout: 2500 });
+  });
+
+  it("supports the mobile term step, back navigation, and keyboard focus containment", async () => {
+    renderNavigation();
+    await screen.findByLabelText("1주차 공통 수업명");
+    const trigger = screen.getByRole("button", { name: "학기·주차 선택" });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("heading", { name: "학기 선택" })).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: /겨울 놀이/ }));
+    await within(dialog).findByRole("button", { name: "12주차" });
+    const closeButton = within(dialog).getByRole("button", { name: "주차 메뉴 닫기" });
+    closeButton.focus();
+    fireEvent.keyDown(closeButton, { key: "Tab", shiftKey: true });
+    expect(within(dialog).getByRole("button", { name: "12주차" })).toHaveFocus();
+    fireEvent.keyDown(document.activeElement!, { key: "Tab" });
+    expect(closeButton).toHaveFocus();
+    fireEvent.click(within(dialog).getByRole("button", { name: "학기 목록으로" }));
+    expect(within(dialog).getByRole("heading", { name: "학기 선택" })).toBeInTheDocument();
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(trigger).toHaveFocus();
+  });
+
+  it("does not show stale weeks while loading another term and offers retry on failure", async () => {
+    let rejectDetail: (error: Error) => void = () => undefined;
+    const pending = new Promise<Response>((_resolve, reject) => { rejectDetail = reject; });
+    let failed = true;
+    renderNavigation(() => failed ? pending : jsonResponse({ ...otherSummary, weeks }));
+    await screen.findByLabelText("1주차 공통 수업명");
+    openTerm();
+    await within(screen.getByRole("dialog")).findByRole("button", { name: "12주차" });
+    fireEvent.click(screen.getByRole("button", { name: "주차 메뉴 닫기" }));
+    openTerm("겨울 놀이");
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("status")).toHaveTextContent("주차 목록을 불러오는 중...");
+    expect(within(dialog).queryByRole("button", { name: "12주차" })).not.toBeInTheDocument();
+    rejectDetail(new Error("목록 조회 실패"));
+    await within(dialog).findByRole("alert");
+    failed = false;
+    fireEvent.click(within(dialog).getByRole("button", { name: "다시 시도" }));
+    expect(await within(dialog).findByRole("button", { name: "12주차" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "가을학기 · 오감별" })).toBeInTheDocument();
+  });
+
 });
