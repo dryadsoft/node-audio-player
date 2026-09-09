@@ -8,7 +8,7 @@ import { mkdirSync } from 'fs';
 import { dirname, resolve } from 'path';
 import { loadSqlite, SqliteDatabase } from './sqlite.types';
 
-const MIGRATION_VERSION = 5;
+const MIGRATION_VERSION = 6;
 
 @Injectable()
 export class SqliteService implements OnModuleInit, OnModuleDestroy {
@@ -259,6 +259,30 @@ export class SqliteService implements OnModuleInit, OnModuleDestroy {
           database.exec(`
             ALTER TABLE lesson_curriculum_weeks DROP COLUMN lesson_plan;
             ALTER TABLE lesson_curriculum_weeks DROP COLUMN materials;
+          `);
+        }
+        if (version === 6) {
+          database.exec(`
+            CREATE TABLE attendance_centers (
+              id TEXT PRIMARY KEY, year INTEGER NOT NULL, term TEXT NOT NULL,
+              location_id TEXT NOT NULL REFERENCES lesson_locations(id),
+              weekday INTEGER NOT NULL CHECK(weekday BETWEEN 0 AND 6),
+              revision INTEGER NOT NULL DEFAULT 1,
+              UNIQUE(year,term,location_id)
+            );
+            CREATE TABLE attendance_periods (
+              id TEXT PRIMARY KEY, center_id TEXT NOT NULL REFERENCES attendance_centers(id),
+              name TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 0,
+              revision INTEGER NOT NULL DEFAULT 1, deleted_at TEXT
+            );
+            CREATE TABLE attendance_pages (
+              id TEXT PRIMARY KEY, period_id TEXT NOT NULL REFERENCES attendance_periods(id),
+              image_hash TEXT NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL,
+              ink_json TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 0,
+              revision INTEGER NOT NULL DEFAULT 1, deleted_at TEXT, updated_at TEXT NOT NULL
+            );
+            CREATE INDEX attendance_period_center ON attendance_periods(center_id);
+            CREATE INDEX attendance_page_period ON attendance_pages(period_id);
           `);
         }
         database

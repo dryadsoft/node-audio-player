@@ -21,6 +21,7 @@ function AppNavigation() {
           <FiEdit3 />
           수업노트
         </NavLink>
+        <NavLink to="/attendance"><FiEdit3 />출석부</NavLink>
       </div>
       <button
         type="button"

@@ -25,7 +25,8 @@
     "db:backup": "node dist/database/backup.js",
     "lesson-plans:extract": "node scripts/extract-lesson-plans.mjs",
     "lesson-plans:extract:test": "node --test scripts/extract-lesson-plans.test.mjs",
-    "lesson-plans:import": "node dist/database/import-lesson-plans.js"
+    "lesson-plans:import": "node dist/database/import-lesson-plans.js",
+    "attendance:backup": "node dist/attendance/backup.js"
   },
   "dependencies": {
     "@nestjs/common": "^8.0.0",

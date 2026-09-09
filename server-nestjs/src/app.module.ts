@@ -1,3 +1,4 @@
+import { AttendanceModule } from './attendance/attendance.module';
 import { Module } from '@nestjs/common';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
@@ -14,6 +15,7 @@ import { PlaylistModule } from './playlist/playlist.module';
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'music'),
     }),
+    AttendanceModule,
     ApiModule,
     AudioModule,
     CommonModule,

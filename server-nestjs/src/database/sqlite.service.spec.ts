@@ -95,7 +95,7 @@ describe('SqliteService migrations', () => {
         sqlite.database
           .prepare('SELECT MAX(version) AS version FROM schema_migrations')
           .get(),
-      ).toEqual({ version: 5 });
+      ).toEqual({ version: 6 });
       expect(
         sqlite.database
           .prepare(
@@ -149,7 +149,8 @@ describe('SqliteService migrations', () => {
     db.exec(`
       ALTER TABLE lesson_curriculum_weeks ADD COLUMN lesson_plan TEXT NOT NULL DEFAULT '';
       ALTER TABLE lesson_curriculum_weeks ADD COLUMN materials TEXT NOT NULL DEFAULT '';
-      DELETE FROM schema_migrations WHERE version = 5;
+      DELETE FROM schema_migrations WHERE version >= 5;
+      DROP TABLE attendance_pages; DROP TABLE attendance_periods; DROP TABLE attendance_centers;
       INSERT INTO lesson_curricula VALUES ('c',2026,'fall','수업','수업','t','t');
       INSERT INTO lesson_locations VALUES ('loc','장소','장소',1,'t','t');
       INSERT INTO lesson_plans (id,year,term,location_id,program_name,revision,created_at,updated_at,curriculum_id)

@@ -31,11 +31,14 @@ addPlugins([
     },
   },
 ]);
-precacheAndRoute(self.__WB_MANIFEST);
+precacheAndRoute([
+  ...self.__WB_MANIFEST,
+  { url: "/attendance-photo-worker.js", revision: "fa65e8e6cdcd7dce" },
+]);
 cleanupOutdatedCaches();
 registerRoute(
   new NavigationRoute(createHandlerBoundToURL("/index.html"), {
-    allowlist: [/^\/(?:lesson-notes|lesson-plans)?(?:\?.*)?$/],
+    allowlist: [/^\/(?:lesson-notes|lesson-plans|attendance)?(?:\?.*)?$/],
     denylist: [/[?&]reauth=1(?:&|$)/],
   })
 );

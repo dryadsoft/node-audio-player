@@ -75,3 +75,7 @@ path and backup command.
 
 수업노트의 기기 저장, 홈 화면 설치, 오프라인 사용과 동기화 검증은
 [`docs/offline-notes.md`](docs/offline-notes.md)를 참고하세요.
+
+### 사진 출석부
+
+사진을 촬영·가져와 직접 체크하고 메모하는 출석부는 `/attendance`에서 사용합니다. 학기·센터·교시별 관리, 오프라인 준비, 사진 보정 및 백업은 [사진 출석부 안내](docs/attendance.md)를 참고하세요.

@@ -1,0 +1,403 @@
+.attendance-screen {
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--canvas, #eeeae1);
+  color: var(--ink, #17201f);
+  overflow: hidden;
+}
+:where(.attendance-screen) button,
+.attendance-screen input,
+.attendance-screen select {
+  font: inherit;
+}
+:where(.attendance-screen) button {
+  border: 1px solid var(--line, #c4c9c1);
+  background: var(--panel, #faf9f5);
+  color: inherit;
+  border-radius: 7px;
+  padding: 7px 10px;
+  min-height: 36px;
+  cursor: pointer;
+}
+:where(.attendance-screen) button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+:where(.attendance-screen) button.primary,
+:where(.attendance-screen) button.selected {
+  background: #234f45;
+  color: #fff;
+  border-color: #234f45;
+}
+:where(.attendance-screen) button:focus-visible,
+.attendance-screen select:focus-visible,
+.attendance-screen input:focus-visible {
+  outline: 3px solid #bc8848;
+  outline-offset: 2px;
+}
+.attendance-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border-bottom: 1px solid var(--line, #c4c9c1);
+  flex-shrink: 0;
+}
+.attendance-header > a {
+  color: inherit;
+  padding: 10px;
+  text-decoration: none;
+}
+.attendance-context {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  align-items: flex-start;
+  margin-right: auto;
+  max-width: 45%;
+  border: 0 !important;
+  background: none !important;
+}
+.attendance-context small {
+  font-size: 10px;
+  opacity: 0.7;
+}
+.attendance-context strong {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  font-size: 13px;
+}
+.attendance-page-control {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}
+.attendance-page-control button {
+  border: 0;
+  font-size: 12px;
+  padding-inline: 6px;
+}
+.attendance-status {
+  font-size: 11px !important;
+}
+.attendance-workspace {
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+.attendance-empty {
+  margin: auto;
+  text-align: center;
+  padding: 24px;
+}
+.attendance-empty strong {
+  display: block;
+  font-size: 22px;
+}
+.attendance-empty p {
+  font-size: 14px;
+  opacity: 0.7;
+}
+.attendance-empty button {
+  margin: 5px;
+}
+.attendance-ink {
+  flex: 1;
+  border: 0;
+  border-radius: 0;
+  --react-ink-canvas-page-padding: 0px;
+  --react-ink-canvas-page-gap: 0px;
+}
+.attendance-ink .ink-scroll-viewport {
+  height: auto !important;
+  flex: 1;
+  min-height: 0;
+}
+.attendance-ink .ink-page {
+  border: 0;
+}
+.attendance-ink .ink-pages-layer {
+  padding: 0 !important;
+}
+.attendance-touch {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  right: 5px;
+}
+.attendance-touch button {
+  font-size: 11px;
+  min-height: 30px;
+  padding: 3px 8px;
+}
+.attendance-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+}
+.attendance-fullscreen .attendance-header > a {
+  display: none;
+}
+.attendance-add-menu,
+.attendance-status-panel {
+  position: absolute;
+  z-index: 30;
+  right: 12px;
+  top: 65px;
+  padding: 12px;
+  border: 1px solid var(--line, #ccc);
+  border-radius: 10px;
+  background: var(--panel, #fff);
+  box-shadow: 0 12px 40px #0003;
+  max-width: min(400px, 95vw);
+}
+.attendance-add-menu {
+  display: grid;
+  gap: 8px;
+}
+.attendance-status-panel p {
+  font-size: 13px;
+}
+.attendance-status-panel .close {
+  float: right;
+}
+.attendance-error {
+  padding: 6px 12px;
+  background: #fff0d5;
+  color: #704615;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.attendance-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: #10221d66;
+  display: flex;
+  justify-content: flex-end;
+}
+.attendance-manager {
+  width: min(460px, 100%);
+  background: var(--panel, #faf9f5);
+  height: 100%;
+  overflow: auto;
+  box-shadow: -12px 0 40px #0002;
+  padding: 16px;
+}
+.attendance-manager header,
+.attendance-import header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.attendance-manager section {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line, #ddd);
+}
+.attendance-manager h2 {
+  font-size: 15px;
+  margin: 0 0 10px;
+}
+.attendance-manager label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  margin: 8px 0;
+}
+.attendance-manager input:not([type="checkbox"]),
+.attendance-manager select {
+  width: 100%;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line, #bbb);
+  border-radius: 6px;
+  background: var(--canvas, #fff);
+  color: inherit;
+}
+.attendance-manager input[type="checkbox"] {
+  width: auto;
+  align-self: flex-start;
+}
+.attendance-fields {
+  display: flex;
+  gap: 12px;
+}
+.attendance-fields label {
+  flex: 1;
+}
+.attendance-manage-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 7px;
+  font-size: 12px;
+}
+.attendance-manage-row > button:first-child {
+  flex: 1;
+  min-width: 70px;
+}
+.attendance-manage-row input {
+  max-width: 100px;
+}
+.attendance-manager form {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: flex-end;
+}
+.attendance-manager form label {
+  flex: 1;
+  min-width: 100px;
+}
+.attendance-import {
+  margin: auto;
+  width: min(850px, 96vw);
+  max-height: 96vh;
+  max-height: 96dvh;
+  background: var(--panel, #fff);
+  border-radius: 12px;
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+}
+.attendance-import-scroll {
+  overflow: auto;
+  padding: 25px;
+  min-height: 0;
+  margin: 10px 0;
+}
+.attendance-crop {
+  position: relative;
+  max-width: 100%;
+  touch-action: none;
+}
+.attendance-crop > img {
+  width: 100%;
+  display: block;
+  pointer-events: none;
+}
+.attendance-crop > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.attendance-crop polygon {
+  fill: #256f3922;
+  stroke: #12ad7a;
+  stroke-width: 0.003;
+}
+.attendance-corner {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border: 2px solid white !important;
+  border-radius: 50% !important;
+  width: 40px;
+  height: 40px;
+  background: #16694e !important;
+  color: white !important;
+  touch-action: none;
+}
+.attendance-import footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.attendance-import p {
+  color: #b63725;
+}
+.attendance-recovery {
+  overflow: auto;
+  flex: 1;
+}
+.attendance-recovery img {
+  width: 100%;
+  display: block;
+}
+.attendance-recovery svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.attendance-conflicts {
+  position: absolute;
+  z-index: 10;
+  bottom: 10px;
+  left: 10px;
+  right: 10px;
+  max-height: 35%;
+  overflow: auto;
+  background: var(--panel, #fff);
+  border: 1px solid #b98337;
+  padding: 12px;
+  border-radius: 8px;
+}
+.attendance-conflicts > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+.attendance-conflicts svg {
+  width: 48px;
+  height: 48px;
+}
+@media (max-width: 600px) {
+  .attendance-header {
+    padding: 3px;
+    gap: 1px;
+  }
+  .attendance-header > a {
+    padding: 5px;
+  }
+  .attendance-header > button {
+    font-size: 10px;
+    padding: 5px;
+  }
+  .attendance-context {
+    max-width: 42%;
+  }
+  .attendance-context strong {
+    font-size: 11px;
+  }
+  .attendance-status {
+    max-width: 65px;
+  }
+  .attendance-page-control button {
+    padding: 3px;
+    min-width: 22px;
+  }
+  .attendance-manager {
+    padding: 12px;
+  }
+}
+
+.attendance-crop {
+  width: min(100%, calc((90vh - 180px) * var(--photo-ratio, 0.7)));
+  margin-inline: auto;
+}
+
+.attendance-fullscreen .attendance-context,
+.attendance-fullscreen .attendance-status,
+.attendance-fullscreen .attendance-header > button[aria-label="사진 추가"] {
+  display: none;
+}
+.attendance-fullscreen .attendance-page-control {
+  margin-right: auto;
+}
