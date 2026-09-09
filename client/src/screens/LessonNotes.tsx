@@ -1,3 +1,4 @@
+import RecoveredInk from "../components/RecoveredInk";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   FiAlertTriangle,
@@ -13,18 +14,13 @@ import {
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { InkCanvas } from "@dryadsoft/react-ink-canvas";
 import { api } from "../api";
-import {
-  clearLessonNoteDraft,
-  lessonNoteDraftKey,
-  loadLessonNoteDraft,
-} from "../api/lessonNoteDrafts";
+import { noteKey as lessonNoteDraftKey } from "../offline/noteStore";
+import { useNoteWorkspace, useLocalCurriculum } from "../offline/useNoteWorkspace";
+import NoteOfflineStatus from "../components/NoteOfflineStatus";
 import { useLessonNoteSync } from "../hooks/useLessonNoteSync";
 import AppNavigation from "../components/AppNavigation";
 import LessonWeekDrawer from "../components/LessonWeekDrawer";
 import {
-  LessonCurriculum,
-  LessonCurriculumSummary,
-  LessonCurriculumWeek,
   LessonPlanSummary,
   LessonTerm,
 } from "../types";
@@ -68,50 +64,27 @@ function LessonNotes() {
     ? lessonNoteDraftKey(selectedId, selectedWeek)
     : "";
 
-  const curriculaQuery = useQuery<LessonCurriculumSummary[]>(
-    "lessonCurricula",
-    () => api.lessonCurricula(),
-    { refetchInterval: 2000, refetchIntervalInBackground: false, refetchOnWindowFocus: "always", refetchOnReconnect: "always" },
-  );
-  const plansQuery = useQuery<LessonPlanSummary[]>("lessonPlans", () =>
-    api.lessonPlans(),
-  );
-  const curricula = useMemo(
-    () => curriculaQuery.data || [],
-    [curriculaQuery.data],
-  );
+  const offline = useNoteWorkspace();
+  const { workspace } = offline;
+  const online = offline.connection === "online";
+  const curricula = useMemo(() => offline.curricula.map(c => ({ ...c.summary,
+    programName: c.deleted ? `${c.summary.programName} · 복구` : c.summary.programName,
+  })), [offline.curricula]);
+  const curriculaQuery = { isLoading: !offline.hydrated || offline.fetching };
+  const plansQuery = useQuery<LessonPlanSummary[]>("lessonPlans", () => api.lessonPlans(), { enabled: online });
   const plans = useMemo(() => plansQuery.data || [], [plansQuery.data]);
-
   useEffect(() => {
     if (!selectedId && curricula.length) setSelectedId(curricula[0].id);
-    if (selectedId && !curricula.some((item) => item.id === selectedId)) {
-      setSelectedId(curricula[0]?.id || "");
-    }
+    if (selectedId && !curricula.some(item => item.id === selectedId)) setSelectedId(curricula[0]?.id || "");
   }, [curricula, selectedId]);
-
-  const detailQuery = useQuery<LessonCurriculum>(
-    ["lessonCurriculum", selectedId],
-    () => api.lessonCurriculum(selectedId),
-    { enabled: Boolean(selectedId), refetchInterval: 2000, refetchIntervalInBackground: false, refetchOnWindowFocus: "always", refetchOnReconnect: "always" },
-  );
-  const weekQuery = useQuery<LessonCurriculumWeek>(
-    ["lessonCurriculumWeek", selectedId, selectedWeek],
-    () => api.lessonCurriculumWeek(selectedId, selectedWeek),
-    { enabled: Boolean(selectedId) },
-  );
-
-  const sync = useLessonNoteSync(selectedId, selectedWeek, weekQuery.data);
+  const detailQuery = useLocalCurriculum(selectedId);
+  const sync = useLessonNoteSync(selectedId, selectedWeek);
   const { draft, dirty, saveState, update: updateDraft } = sync;
-  const saveMutation = { isLoading: saveState === "saving" };
-  const currentRevision = detailQuery.data?.weeks.find(item => item.week === selectedWeek)?.revision;
-  const { refetch: refetchWeek } = weekQuery;
-  useEffect(() => {
-    if (currentRevision && currentRevision !== weekQuery.data?.revision) refetchWeek();
-  }, [currentRevision, weekQuery.data?.revision, refetchWeek]);
+  const saveMutation = { isLoading: saveState === "saving" || saveState === "storing" };
 
   const createMutation = useMutation(api.createLessonCurriculum, {
     onSuccess: async (created) => {
-      await queryClient.invalidateQueries("lessonCurricula");
+      await workspace.refresh(true);
       setSelectedId(created.id);
       setSelectedWeek(1);
       setCreating(false);
@@ -119,27 +92,13 @@ function LessonNotes() {
     },
   });
 
-  const clearCurriculumDrafts = (curriculumId: string) =>
-    Promise.all(
-      Array.from({ length: 12 }, (_, index) =>
-        clearLessonNoteDraft(lessonNoteDraftKey(curriculumId, index + 1)).catch(
-          () => undefined,
-        ),
-      ),
-    );
-
-  const refreshAfterAction = async (curriculumId: string) => {
-    await Promise.all([
-      queryClient.invalidateQueries("lessonCurricula"),
-      queryClient.invalidateQueries(["lessonCurriculum", curriculumId]),
-      queryClient.invalidateQueries(["lessonCurriculumWeek", curriculumId]),
-      queryClient.invalidateQueries("lessonPlans"),
-    ]);
+  const refreshAfterAction = async (_curriculumId: string) => {
+    await workspace.refresh(true);
+    await queryClient.invalidateQueries("lessonPlans");
   };
 
   const replaceMutation = useMutation(api.replaceLessonCurriculumWeeks, {
     onSuccess: async (replaced) => {
-      await clearCurriculumDrafts(replaced.id);
       sync.forget();
       setManageDialog(null);
       setReplaceSourceId("");
@@ -154,7 +113,6 @@ function LessonNotes() {
 
   const deleteMutation = useMutation(api.deleteLessonCurriculum, {
     onSuccess: async (result) => {
-      await clearCurriculumDrafts(result.id);
       queryClient.removeQueries(["lessonCurriculum", result.id]);
       queryClient.removeQueries(["lessonCurriculumWeek", result.id]);
       setSelectedId("");
@@ -163,7 +121,7 @@ function LessonNotes() {
       setManageDialog(null);
       setDeleteConfirmed(false);
       await Promise.all([
-        queryClient.invalidateQueries("lessonCurricula"),
+        workspace.refresh(true),
         queryClient.invalidateQueries("lessonPlans"),
       ]);
       setActionNotice(
@@ -201,7 +159,7 @@ function LessonNotes() {
     : [];
 
   const openManageDialog = async (dialog: Exclude<ManageDialog, null>) => {
-    if (!detailQuery.data) return;
+    if (!detailQuery.data || !online || sync.readOnly) return;
     setActionError("");
     setActionNotice("");
     if (saveState !== "saved" || dirty || saveMutation.isLoading) {
@@ -210,14 +168,7 @@ function LessonNotes() {
     }
     setCheckingDrafts(true);
     try {
-      const drafts = await Promise.all(
-        Array.from({ length: 12 }, (_, index) =>
-          loadLessonNoteDraft(lessonNoteDraftKey(selectedId, index + 1)),
-        ),
-      );
-      const pendingWeeks = drafts.flatMap((item, index) =>
-        item ? [index + 1] : [],
-      );
+      const pendingWeeks = await workspace.pendingWeeks(selectedId);
       if (pendingWeeks.length) {
         setActionNotice(
           `${pendingWeeks.join(", ")}주차에 미저장 내용이 있습니다. 해당 주차를 열어 저장한 후 다시 시도하세요.`,
@@ -243,7 +194,7 @@ function LessonNotes() {
   };
 
   const submitReplacement = () => {
-    if (!detailQuery.data || !replaceSourceId) return;
+    if (!online || !detailQuery.data || !replaceSourceId) return;
     setActionError("");
     replaceMutation.mutate({
       id: detailQuery.data.id,
@@ -254,7 +205,7 @@ function LessonNotes() {
   };
 
   const submitDelete = () => {
-    if (!detailQuery.data || !deleteConfirmed) return;
+    if (!online || !detailQuery.data || !deleteConfirmed) return;
     setActionError("");
     deleteMutation.mutate({
       id: detailQuery.data.id,
@@ -264,6 +215,7 @@ function LessonNotes() {
 
   const submitCreate = (event: FormEvent) => {
     event.preventDefault();
+    if (!online) return;
     createMutation.mutate({
       year: createYear,
       term: createTerm,
@@ -289,9 +241,10 @@ function LessonNotes() {
 
 
   const saveLabel = {
-    saved: "저장 완료",
-    unsaved: "저장 대기",
-    saving: "저장 중...",
+    saved: "동기화 완료",
+    unsaved: "기기에 저장됨 · 동기화 대기",
+    storing: "기기에 저장 중...",
+    saving: "서버 동기화 중...",
     error: "저장 실패",
     conflict: "충돌 확인",
   }[saveState];
@@ -309,7 +262,7 @@ function LessonNotes() {
             <button
               className="button secondary curriculum-manage-button"
               type="button"
-              disabled={checkingDrafts || saveState !== "saved"}
+              disabled={!online || sync.readOnly || checkingDrafts || saveState !== "saved"}
               onClick={() => openManageDialog("replace")}
             >
               <FiRepeat /> 12주 교체
@@ -317,7 +270,7 @@ function LessonNotes() {
             <button
               className="button danger curriculum-manage-button"
               type="button"
-              disabled={checkingDrafts || saveState !== "saved"}
+              disabled={!online || sync.readOnly || checkingDrafts || saveState !== "saved"}
               onClick={() => openManageDialog("delete")}
             >
               <FiTrash2 /> 원본 삭제
@@ -326,12 +279,16 @@ function LessonNotes() {
         ) : null}
         <button
           className="button accent notes-create-button"
+          disabled={!online}
           type="button"
           onClick={() => setCreating((current) => !current)}
         >
           <FiPlus /> 새 공통 원본
         </button>
       </header>
+
+      <NoteOfflineStatus />
+      {sync.readOnly ? <p className="curriculum-action-notice">서버에서 삭제된 원본의 복구 기록입니다. <button className="button secondary" onClick={() => workspace.exportData(selectedId)}>복구 기록 내보내기</button></p> : null}
 
       {creating ? (
         <form className="curriculum-create" onSubmit={submitCreate}>
@@ -442,7 +399,7 @@ function LessonNotes() {
               aria-controls="lesson-week-drawer"
               onClick={() => setMenuCurriculumId(item.id)}
             >
-              <b>{item.year}년 {TERM_LABELS[item.term]} <FiChevronRight aria-hidden="true" /></b>
+              <b>{item.year ? `${item.year}년 ${TERM_LABELS[item.term]}` : "복구 기록"} <FiChevronRight aria-hidden="true" /></b>
               <span>{item.programName}</span>
               <small>{item.completedWeeks}/12 작성 · 장소 {item.linkedPlanCount}곳 연결</small>
             </button>
@@ -463,8 +420,8 @@ function LessonNotes() {
                 <div className="notebook-page">
                   <div className="notebook-inline-fields" onCompositionStart={() => sync.composition(true)} onCompositionEnd={() => sync.composition(false)}>
                     <h2 ref={notebookTitleRef} tabIndex={-1}>{selectedWeek}주차</h2>
-                    <input aria-label={`${selectedWeek}주차 공통 수업명`} placeholder="수업명" value={draft.className} onChange={event => updateDraft({className: event.target.value})} />
-                    <textarea aria-label={`${selectedWeek}주차 공통 수업할 내용`} placeholder="수업내용" rows={2} value={draft.content} onChange={event => updateDraft({content: event.target.value})} />
+                    <input readOnly={sync.readOnly} aria-label={`${selectedWeek}주차 공통 수업명`} placeholder="수업명" value={draft.className} onChange={event => updateDraft({className: event.target.value})} />
+                    <textarea readOnly={sync.readOnly} aria-label={`${selectedWeek}주차 공통 수업할 내용`} placeholder="수업내용" rows={2} value={draft.content} onChange={event => updateDraft({content: event.target.value})} />
                   </div>
                   {sync.error ? <div role="alert">{sync.error} <button className="button secondary" onClick={sync.retry}><FiRefreshCw /> 저장 재시도</button></div> : null}
                   {sync.conflicts.length ? <section className="note-conflicts" aria-label="충돌 확인">
@@ -477,17 +434,17 @@ function LessonNotes() {
                       </div>)}
                     </div>)}
                   </section> : null}
-                  <InkCanvas
+                  {sync.readOnly ? <RecoveredInk document={draft.inkDocument} /> : <InkCanvas
                     className="notebook-ink-editor"
                     key={activeKey}
                     historyResetKey={sync.resetKey}
                     onInteractionChange={sync.interaction}
                     document={draft.inkDocument}
                     onChange={(inkDocument) => updateDraft({ inkDocument })}
-                  />
+                  />}
                 </div>
               ) : (
-                <div className="loading-state">주차 노트를 불러오는 중...</div>
+                <div className="loading-state">{online ? "주차 노트를 불러오는 중..." : "이 주차는 아직 기기에 저장되지 않았습니다. 온라인 연결 후 다시 열어주세요."}</div>
               )}
             </>
           ) : detailQuery.isLoading ? (

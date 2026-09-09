@@ -70,3 +70,8 @@ Raspberry Pi 운영 환경은 공개 포트 대신 Cloudflare Tunnel과 Access�
 선택한 계획서는 기존 HWP 표 형식을 따른 DOCX로 다운로드할 수 있습니다.
 NestJS stores this data in SQLite. See `server-nestjs/README.md` for the data
 path and backup command.
+
+## 수업노트 PWA
+
+수업노트의 기기 저장, 홈 화면 설치, 오프라인 사용과 동기화 검증은
+[`docs/offline-notes.md`](docs/offline-notes.md)를 참고하세요.

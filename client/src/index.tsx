@@ -1,3 +1,4 @@
+import { registerPwa } from "./offline/pwa";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "@dryadsoft/react-ink-canvas/styles.css";
@@ -15,3 +16,5 @@ root.render(
     </QueryClientProvider>
   </React.StrictMode>
 );
+
+void registerPwa();

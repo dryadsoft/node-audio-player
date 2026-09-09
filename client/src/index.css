@@ -2480,3 +2480,12 @@ textarea {
 .note-conflict svg { height: 100px; width: 100%; }
 @media (max-width: 600px) { .notebook-inline-fields { grid-template-columns: auto minmax(0, 1fr); } .notebook-inline-fields textarea { grid-column: 1 / -1; } }
 @media (prefers-reduced-motion: reduce) { .lesson-drawer-backdrop.closing, .lesson-drawer-backdrop.closing .lesson-week-drawer { animation: none; } }
+
+.note-offline-status { flex: 0 0 auto; color: var(--muted); font-size: .78rem; border-bottom: 1px solid var(--line); }
+.note-offline-status summary { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; padding: 5px 0; cursor: pointer; }
+.note-offline-status summary::after { content: "상세"; }
+.note-offline-details { max-height: 30dvh; overflow: auto; padding: 6px 0 10px; }
+.note-offline-details p { margin: 4px 0; }
+.note-offline-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.recovered-ink { overflow: auto; min-height: 0; }
+.recovered-ink svg { display: block; width: 100%; background: #fff; margin-bottom: 8px; }

@@ -1,9 +1,8 @@
 import { RefObject, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FiArrowLeft, FiCheck, FiX } from "react-icons/fi";
-import { useQuery } from "react-query";
-import { api } from "../api";
-import { LessonCurriculum, LessonCurriculumSummary, LessonTerm } from "../types";
+import { useLocalCurriculum } from "../offline/useNoteWorkspace";
+import { LessonCurriculumSummary, LessonTerm } from "../types";
 
 const TERM_LABELS: Record<LessonTerm, string> = {
   spring: "봄학기",
@@ -52,11 +51,7 @@ function LessonWeekDrawer({
   closeRef.current = () => close();
   useEffect(() => () => window.clearTimeout(timer.current), []);
   const curriculum = curricula.find((item) => item.id === curriculumId);
-  const detailQuery = useQuery<LessonCurriculum>(
-    ["lessonCurriculum", curriculumId],
-    () => api.lessonCurriculum(curriculumId),
-    { enabled: Boolean(curriculumId), keepPreviousData: false },
-  );
+  const detailQuery = useLocalCurriculum(curriculumId);
   const detail = detailQuery.data?.id === curriculumId ? detailQuery.data : undefined;
 
   useEffect(() => {
@@ -140,7 +135,7 @@ function LessonWeekDrawer({
         <header className="lesson-drawer-heading">
           <div>
             <h2 id="lesson-drawer-title">
-              {curriculum ? `${curriculum.year}년 ${TERM_LABELS[curriculum.term]}` : "학기 선택"}
+              {curriculum ? (curriculum.year ? `${curriculum.year}년 ${TERM_LABELS[curriculum.term]}` : "복구 기록") : "학기 선택"}
             </h2>
             {curriculum ? <p>{curriculum.programName}</p> : null}
           </div>
@@ -162,11 +157,11 @@ function LessonWeekDrawer({
                 aria-current={item.id === selectedId ? "true" : undefined}
                 onClick={() => setCurriculumId(item.id)}
               >
-                <b>{item.year}년 {TERM_LABELS[item.term]}</b>
+                <b>{item.year ? `${item.year}년 ${TERM_LABELS[item.term]}` : "복구 기록"}</b>
                 <span className="lesson-drawer-label">{item.programName}</span>
               </button>
             )) : <p className="lesson-drawer-state">공통 원본이 없습니다. 새 공통 원본으로 시작하세요.</p>
-          ) : detailQuery.isError ? (
+          ) : !detail && detailQuery.isError ? (
             <div className="lesson-drawer-state" role="alert">
               <p>주차 목록을 불러오지 못했습니다.</p>
               <button className="button secondary" type="button" onClick={() => detailQuery.refetch()}>다시 시도</button>
@@ -174,6 +169,7 @@ function LessonWeekDrawer({
           ) : !detail ? (
             <p className="lesson-drawer-state" role="status">주차 목록을 불러오는 중...</p>
           ) : detail.weeks.map((week) => {
+            const available = detailQuery.availableWeeks.includes(week.week);
             const filled = Boolean(week.hasInk || week.className || week.content);
             return (
               <button
@@ -188,6 +184,7 @@ function LessonWeekDrawer({
               >
                 <b>{week.week}주차</b>
                 {week.className ? <span className="lesson-drawer-label">{week.className}</span> : null}
+                {!available ? <small>기기에 없음</small> : null}
                 {filled ? <FiCheck className="lesson-drawer-filled" aria-hidden="true" /> : null}
               </button>
             );

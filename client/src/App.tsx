@@ -1,3 +1,4 @@
+import { NoteWorkspaceLifecycle } from "./offline/useNoteWorkspace";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { ThemeProvider } from "./context/ThemeContext";
 import Home from "./screens/Home";
@@ -7,6 +8,7 @@ import LessonNotes from "./screens/LessonNotes";
 function App() {
   return (
     <ThemeProvider>
+      <NoteWorkspaceLifecycle />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Home />} />

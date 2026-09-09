@@ -14,40 +14,64 @@ import {
 } from "../types";
 
 export class ApiError extends Error {
-  constructor(message: string, public status: number) { super(message); }
+  constructor(message: string, public status: number) {
+    super(message);
+  }
 }
 
 const request = async <T>(url: string, options?: RequestInit): Promise<T> => {
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options?.headers,
-    },
-  });
+  const isNote = url.startsWith("/api/lesson-curricula");
+  const controller = isNote ? new AbortController() : undefined;
+  const timeout = controller
+    ? window.setTimeout(() => controller.abort(), 10000)
+    : undefined;
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      ...(controller
+        ? { signal: controller.signal, cache: "no-store" as RequestCache }
+        : {}),
+      headers: { "Content-Type": "application/json", ...options?.headers },
+    });
+    if (
+      isNote &&
+      (response.redirected ||
+        (response.ok &&
+          response.headers &&
+          !response.headers.get("content-type")?.includes("application/json")))
+    ) {
+      throw new ApiError("로그인이 필요합니다. 기기 기록은 보존됩니다.", 401);
+    }
 
-  if (!response.ok) {
-    const payload = await response.json().catch(() => null);
-    throw new ApiError(payload?.message || "요청을 처리하지 못했습니다.", response.status);
-  }
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      throw new ApiError(
+        payload?.message || "요청을 처리하지 못했습니다.",
+        response.status
+      );
+    }
 
-  if (response.status === 204) {
-    return undefined as unknown as T;
+    if (response.status === 204) {
+      return undefined as unknown as T;
+    }
+    return isNote ? await response.json() : response.json();
+  } finally {
+    if (timeout !== undefined) window.clearTimeout(timeout);
   }
-  return response.json();
 };
 
 export const api = {
   playlist: ({ queryKey }: { queryKey: readonly unknown[] }) => {
     const [, directory] = queryKey;
     return request<LibraryResponse>(
-      `/api/playlist?dir=${encodeURIComponent(String(directory || ""))}`,
+      `/api/playlist?dir=${encodeURIComponent(String(directory || ""))}`
     );
   },
   search: ({ queryKey }: { queryKey: readonly unknown[] }) => {
     const [, keyword] = queryKey;
     return request<string[]>(
-      `/api/search?keyword=${encodeURIComponent(String(keyword || ""))}`,
+      `/api/search?keyword=${encodeURIComponent(String(keyword || ""))}`
     );
   },
   playlists: () => request<SavedPlaylist[]>("/api/playlists"),
@@ -120,16 +144,16 @@ export const api = {
     if (programName) params.set("programName", programName);
     const query = params.toString();
     return request<LessonCurriculumSummary[]>(
-      `/api/lesson-curricula${query ? `?${query}` : ""}`,
+      `/api/lesson-curricula${query ? `?${query}` : ""}`
     );
   },
   lessonCurriculum: (id: string) =>
     request<LessonCurriculum>(
-      `/api/lesson-curricula/${encodeURIComponent(id)}`,
+      `/api/lesson-curricula/${encodeURIComponent(id)}`
     ),
   lessonCurriculumWeek: (id: string, week: number) =>
     request<LessonCurriculumWeek>(
-      `/api/lesson-curricula/${encodeURIComponent(id)}/weeks/${week}`,
+      `/api/lesson-curricula/${encodeURIComponent(id)}/weeks/${week}`
     ),
   createLessonCurriculum: (input: {
     year: number;
@@ -156,7 +180,7 @@ export const api = {
           inkDocument: input.inkDocument,
           expectedRevision: input.revision,
         }),
-      },
+      }
     ),
   replaceLessonCurriculumWeeks: ({
     id,
@@ -172,7 +196,7 @@ export const api = {
       {
         method: "PUT",
         body: JSON.stringify({ sourcePlanId, expectedUpdatedAt }),
-      },
+      }
     ),
   deleteLessonCurriculum: ({
     id,
@@ -186,7 +210,7 @@ export const api = {
       {
         method: "DELETE",
         body: JSON.stringify({ expectedUpdatedAt }),
-      },
+      }
     ),
   lessonPlans: ({
     year,
@@ -206,7 +230,7 @@ export const api = {
     if (programName) params.set("programName", programName);
     const query = params.toString();
     return request<LessonPlanSummary[]>(
-      `/api/lesson-plans${query ? `?${query}` : ""}`,
+      `/api/lesson-plans${query ? `?${query}` : ""}`
     );
   },
   lessonPlan: (id: string) =>

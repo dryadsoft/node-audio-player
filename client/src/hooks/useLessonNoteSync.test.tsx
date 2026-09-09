@@ -1,195 +1,105 @@
-import { act, render } from "@testing-library/react";
-import { api, ApiError } from "../api";
-import {
-  clearLessonNoteDraft,
-  loadLessonNoteDraft,
-  saveLessonNoteDraft,
-} from "../api/lessonNoteDrafts";
-import { LessonCurriculumWeek } from "../types";
+import { act, render, waitFor } from "@testing-library/react";
+import { fixture } from "../testSupport/noteFixture";
+import { NoteWorkspaceContext } from "../offline/useNoteWorkspace";
 import { useLessonNoteSync } from "./useLessonNoteSync";
-jest.mock("../api/lessonNoteDrafts", () => ({
-  loadLessonNoteDraft: jest.fn().mockResolvedValue(undefined),
-  saveLessonNoteDraft: jest.fn().mockResolvedValue(undefined),
-  clearLessonNoteDraft: jest.fn().mockResolvedValue(undefined),
-}));
-const note = (revision = 1): LessonCurriculumWeek => ({
-  week: 1,
-  className: "원본",
-  content: "내용",
-  hasInk: false,
-  revision,
-  updatedAt: String(revision),
-  inkDocument: { version: 2, aspectRatio: 4 / 3, pageCount: 2, strokes: [] },
-});
+import { api } from "../api";
 let sync: ReturnType<typeof useLessonNoteSync>;
-function Harness({
-  id = "c",
-  remote = initial,
-}: {
-  id?: string;
-  remote?: LessonCurriculumWeek;
-}) {
-  sync = useLessonNoteSync(id, remote.week, remote);
+function Harness({ week = 1 }: { week?: number }) {
+  sync = useLessonNoteSync("c1", week);
   return null;
 }
-const initial = note();
-const flush = async () => {
-  await act(async () => {
-    await Promise.resolve();
-  });
-};
-const tick = async () => {
-  await act(async () => {
-    jest.advanceTimersByTime(701);
-  });
-};
-beforeEach(() => {
-  jest.useFakeTimers();
-  jest.clearAllMocks();
-  (loadLessonNoteDraft as jest.Mock).mockResolvedValue(undefined);
-  (saveLessonNoteDraft as jest.Mock).mockResolvedValue(undefined);
-  (clearLessonNoteDraft as jest.Mock).mockResolvedValue(undefined);
-});
-afterEach(() => {
-  jest.useRealTimers();
-  jest.restoreAllMocks();
-});
-it("applies a remote revision when clean and merges independent edits when dirty", async () => {
-  const view = render(<Harness />);
-  await flush();
-  act(() => sync.update({ className: "장비" }));
-  view.rerender(<Harness remote={{ ...note(2), content: "서버" }} />);
-  await flush();
-  expect(sync.draft?.className).toBe("장비");
-  expect(sync.draft?.content).toBe("서버");
-  expect(sync.conflicts).toHaveLength(0);
-});
-it("preserves input entered during save and uses the acknowledgement revision", async () => {
-  let finish: (v: LessonCurriculumWeek) => void = () => {};
-  jest
-    .spyOn(api, "updateLessonCurriculumWeek")
-    .mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finish = resolve;
-        })
-    )
-    .mockImplementation(async (input) => ({
-      ...note(3),
-      className: input.className,
-    }));
-  render(<Harness />);
-  await flush();
-  act(() => sync.update({ className: "전송" }));
-  await tick();
-  act(() => sync.update({ className: "추가 입력" }));
-  await act(async () => finish({ ...note(2), className: "전송" }));
-  expect(sync.draft?.className).toBe("추가 입력");
-  expect(sync.draft?.revision).toBe(2);
-  await tick();
-  expect(api.updateLessonCurriculumWeek).toHaveBeenLastCalledWith(
-    expect.objectContaining({ className: "추가 입력", revision: 2 })
+beforeEach(() =>
+  Object.defineProperty(navigator, "onLine", {
+    configurable: true,
+    value: true,
+  })
+);
+afterEach(() => jest.restoreAllMocks());
+it("opens a locally cached note without a server response", async () => {
+  const f = fixture();
+  await f.workspace.refresh();
+  Object.defineProperty(navigator, "onLine", { value: false });
+  render(
+    <NoteWorkspaceContext.Provider value={f.workspace}>
+      <Harness />
+    </NoteWorkspaceContext.Provider>
   );
+  expect(sync.draft?.className).toBe("첫 만남");
+  act(() => sync.update({ content: "오프라인 편집" }));
+  await waitFor(() => expect(sync.saveState).toBe("unsaved"));
+  expect(sync.draft?.content).toBe("오프라인 편집");
+  expect(api.updateLessonCurriculumWeek).not.toHaveBeenCalled();
 });
-it("rebases a 409 and retries, but stops at a text conflict", async () => {
-  jest
-    .spyOn(api, "updateLessonCurriculumWeek")
-    .mockRejectedValueOnce(new ApiError("충돌", 409))
-    .mockImplementation(async (input) => ({ ...note(3), ...input }));
-  jest
-    .spyOn(api, "lessonCurriculumWeek")
-    .mockResolvedValue({ ...note(2), content: "서버" });
-  render(<Harness />);
-  await flush();
-  act(() => sync.update({ className: "장비" }));
-  await tick();
-  expect(api.updateLessonCurriculumWeek).toHaveBeenCalledTimes(2);
-  expect(sync.draft?.content).toBe("서버");
-  expect(sync.conflicts).toHaveLength(0);
-});
-it("limits repeated 409 saves to three retries", async () => {
-  jest
-    .spyOn(api, "updateLessonCurriculumWeek")
-    .mockRejectedValue(new ApiError("충돌", 409));
-  let revision = 1;
-  jest
-    .spyOn(api, "lessonCurriculumWeek")
-    .mockImplementation(async () => note(++revision));
-  render(<Harness />);
-  await flush();
-  act(() => sync.update({ className: "장비" }));
-  await tick();
-  expect(api.updateLessonCurriculumWeek).toHaveBeenCalledTimes(4);
-  expect(sync.saveState).toBe("error");
-  await tick();
-  expect(api.updateLessonCurriculumWeek).toHaveBeenCalledTimes(4);
-});
-it("holds remote ink during interaction and defers saves during Korean composition", async () => {
-  const save = jest
-    .spyOn(api, "updateLessonCurriculumWeek")
-    .mockResolvedValue(note(3));
-  const view = render(<Harness />);
-  await flush();
-  act(() => sync.interaction(true));
-  view.rerender(<Harness remote={{ ...note(2), content: "새 내용" }} />);
-  await flush();
-  expect(sync.draft?.revision).toBe(1);
-  act(() => sync.interaction(false));
-  expect(sync.draft?.revision).toBe(2);
+it("keeps Korean composition local until it finishes", async () => {
+  const f = fixture();
+  await f.workspace.refresh();
+  render(
+    <NoteWorkspaceContext.Provider value={f.workspace}>
+      <Harness />
+    </NoteWorkspaceContext.Provider>
+  );
   act(() => {
     sync.composition(true);
     sync.update({ className: "한" });
   });
-  await tick();
-  expect(save).not.toHaveBeenCalled();
-  act(() => sync.composition(false));
-  await tick();
-  expect(save).toHaveBeenCalledTimes(1);
-});
-it("keeps legacy and revision-mismatched drafts available for conflict recovery", async () => {
-  (loadLessonNoteDraft as jest.Mock).mockResolvedValue({
-    local: { ...note(), className: "옛 임시" },
+  await waitFor(() => expect(sync.saveState).toBe("unsaved"));
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 750));
+    await f.workspace.refresh();
   });
-  render(<Harness remote={note(4)} />);
-  await flush();
-  expect(sync.conflicts.map((c) => c.id)).toContain("className");
-  act(() => sync.resolve(sync.conflicts[0], "local"));
-  expect(sync.draft?.className).toBe("옛 임시");
-  expect(saveLessonNoteDraft).toHaveBeenLastCalledWith(
-    "c:1",
-    expect.objectContaining({ className: "옛 임시" }),
-    expect.objectContaining({ revision: 4 })
-  );
+  expect(api.updateLessonCurriculumWeek).not.toHaveBeenCalled();
+  act(() => sync.composition(false));
+  await act(async () => {
+    await f.workspace.refresh(true);
+  });
+  await waitFor(() => expect(sync.saveState).toBe("saved"));
 });
-it("does not apply a late save from another week to the active week", async () => {
-  let finish: (v: LessonCurriculumWeek) => void = () => {};
-  jest.spyOn(api, "updateLessonCurriculumWeek").mockImplementation(
-    () =>
-      new Promise((resolve) => {
-        finish = resolve;
-      })
+it("keeps the current week isolated from earlier asynchronous writes", async () => {
+  const f = fixture();
+  await f.workspace.refresh();
+  const view = render(
+    <NoteWorkspaceContext.Provider value={f.workspace}>
+      <Harness />
+    </NoteWorkspaceContext.Provider>
   );
-  const view = render(<Harness />);
-  await flush();
-  act(() => sync.update({ className: "첫 주" }));
-  await tick();
-  view.rerender(<Harness remote={{ ...note(), week: 2 }} />);
-  await flush();
-  await act(async () => finish({ ...note(2), className: "첫 주" }));
+  act(() => sync.update({ className: "첫 주 수정" }));
+  view.rerender(
+    <NoteWorkspaceContext.Provider value={f.workspace}>
+      <Harness week={2} />
+    </NoteWorkspaceContext.Provider>
+  );
+  await waitFor(() =>
+    expect(
+      f.workspace.getSnapshot().notes.find((n) => n.key === "c1:1")?.local
+        .className
+    ).toBe("첫 주 수정")
+  );
   expect(sync.draft?.week).toBe(2);
-  expect(sync.draft?.className).toBe("원본");
+  expect(sync.draft?.className).toBe("");
+  view.rerender(
+    <NoteWorkspaceContext.Provider value={f.workspace}>
+      <Harness />
+    </NoteWorkspaceContext.Provider>
+  );
+  expect(sync.draft?.className).toBe("첫 주 수정");
 });
-
-it("accepts server text normalization without an endless save loop", async () => {
+it("retains typed input after local storage failure and retries it", async () => {
+  const f = fixture();
+  await f.workspace.refresh();
+  render(
+    <NoteWorkspaceContext.Provider value={f.workspace}>
+      <Harness />
+    </NoteWorkspaceContext.Provider>
+  );
   jest
-    .spyOn(api, "updateLessonCurriculumWeek")
-    .mockResolvedValue({ ...note(2), className: "수업" });
-  render(<Harness />);
-  await flush();
-  act(() => sync.update({ className: " 수업 " }));
-  await tick();
-  expect(sync.draft?.className).toBe("수업");
-  expect(sync.saveState).toBe("saved");
-  await tick();
-  expect(api.updateLessonCurriculumWeek).toHaveBeenCalledTimes(1);
+    .spyOn(f.store, "change")
+    .mockRejectedValueOnce(new DOMException("full", "QuotaExceededError"));
+  act(() => sync.update({ content: "사라지면 안 되는 입력" }));
+  await waitFor(() => expect(sync.saveState).toBe("error"));
+  expect(sync.draft?.content).toBe("사라지면 안 되는 입력");
+  await act(async () => {
+    await sync.retry();
+  });
+  await waitFor(() => expect(sync.saveState).toBe("unsaved"));
+  expect(sync.draft?.content).toBe("사라지면 안 되는 입력");
 });
