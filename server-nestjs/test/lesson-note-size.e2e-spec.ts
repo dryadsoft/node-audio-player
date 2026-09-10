@@ -9,6 +9,9 @@ import { LessonPlanModule } from '../src/lesson-plan/lesson-plan.module';
 import { LessonCurriculumService } from '../src/lesson-plan/lesson-curriculum.service';
 import { configureBodyParsers } from '../src/common/body-parsers';
 
+// ARM Pi needs time for large JSON assertions and boundary-request serialization.
+jest.setTimeout(30000);
+
 describe('Lesson note request limits', () => {
   let app: INestApplication, root: string, id: string;
   beforeAll(async () => {
