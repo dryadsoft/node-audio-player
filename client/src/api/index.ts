@@ -20,25 +20,19 @@ export class ApiError extends Error {
 }
 
 const request = async <T>(url: string, options?: RequestInit): Promise<T> => {
-  const isNote = url.startsWith("/api/lesson-curricula");
-  const controller = isNote ? new AbortController() : undefined;
-  const timeout = controller
-    ? window.setTimeout(() => controller.abort(), 10000)
-    : undefined;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 10000);
   let response: Response;
   try {
     response = await fetch(url, {
       ...options,
-      ...(controller
-        ? { signal: controller.signal, cache: "no-store" as RequestCache }
-        : {}),
+      signal: controller.signal,
+      cache: "no-store",
       headers: { "Content-Type": "application/json", ...options?.headers },
     });
     if (
-      isNote &&
-      (response.redirected ||
-        (response.ok &&
-          response.headers &&
+      (response.redirected || response.status === 401 || response.status === 403 ||
+        (response.ok && response.status !== 204 &&
           !response.headers.get("content-type")?.includes("application/json")))
     ) {
       throw new ApiError("로그인이 필요합니다. 기기 기록은 보존됩니다.", 401);
@@ -55,7 +49,7 @@ const request = async <T>(url: string, options?: RequestInit): Promise<T> => {
     if (response.status === 204) {
       return undefined as unknown as T;
     }
-    return isNote ? await response.json() : response.json();
+    return await response.json();
   } finally {
     if (timeout !== undefined) window.clearTimeout(timeout);
   }

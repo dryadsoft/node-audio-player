@@ -1,3 +1,4 @@
+import RequestFailure from "../components/RequestFailure";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   FiBookOpen,
@@ -547,6 +548,9 @@ function LessonPlans() {
         </div>
       </section>
 
+      <RequestFailure error={plansQuery.error || locationsQuery.error || curriculaQuery.error || detailQuery.error} retry={() => {
+        void plansQuery.refetch(); void locationsQuery.refetch(); void curriculaQuery.refetch(); if (selectedPlanId) void detailQuery.refetch();
+      }} />
       <div className="lesson-workspace">
         <aside className="plan-browser" aria-label="강의계획서 목록">
           <div className="plan-browser-heading">
@@ -584,7 +588,7 @@ function LessonPlans() {
                 </span>
               </button>
             ))}
-            {!plansQuery.isLoading && filteredPlans.length === 0 ? (
+            {!plansQuery.isLoading && !plansQuery.isError && filteredPlans.length === 0 ? (
               <div className="empty-state small">
                 <FiBookOpen />
                 <strong>조건에 맞는 계획서가 없습니다.</strong>
@@ -1096,7 +1100,7 @@ function LessonPlans() {
             </article>
           ) : detailQuery.isLoading ? (
             <div className="loading-state">강의계획서를 불러오는 중...</div>
-          ) : (
+          ) : plansQuery.isError || detailQuery.isError ? null : (
             <div className="empty-state">
               <FiBookOpen />
               <strong>확인할 강의계획서를 선택하세요.</strong>

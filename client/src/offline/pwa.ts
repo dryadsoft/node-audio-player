@@ -42,8 +42,19 @@ export async function registerPwa() {
     await navigator.serviceWorker.ready;
     publish(registration.waiting ? "update" : "ready");
     if (new URLSearchParams(window.location.search).has("reauth"))
-      window.history.replaceState(null, "", "/lesson-notes");
+      window.history.replaceState(null, "", withoutReauth(window.location.href));
   } catch {
     publish("error");
   }
+}
+
+export function withoutReauth(href: string) {
+  const url = new URL(href);
+  url.searchParams.delete("reauth");
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+export function reauthUrl(href = window.location.href) {
+  const url = new URL(href);
+  url.searchParams.set("reauth", "1");
+  return `${url.pathname}${url.search}${url.hash}`;
 }

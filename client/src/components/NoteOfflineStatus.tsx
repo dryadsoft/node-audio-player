@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
-import { pwaState, subscribePwa } from "../offline/pwa";
+import StatusDialog from "./StatusDialog";
+import { attendanceWorkspace } from "../attendance/workspace";
+import { pwaState, subscribePwa, reauthUrl } from "../offline/pwa";
 import { useNoteWorkspace } from "../offline/useNoteWorkspace";
 
 export default function NoteOfflineStatus() {
   const state = useNoteWorkspace();
+  const [open, setOpen] = useState(false);
   const [pwa, setPwa] = useState(pwaState);
   useEffect(() => subscribePwa(() => setPwa(pwaState())), []);
   useEffect(() => {
@@ -34,14 +37,14 @@ export default function NoteOfflineStatus() {
     error: "연결 확인 필요",
   }[state.connection];
   return (
-    <details className="note-offline-status">
-      <summary>
+    <div className="note-offline-status">
+      <button type="button" className="note-offline-summary" aria-haspopup="dialog" onClick={() => setOpen(true)}>
         <span>{label}</span>
         <span>
           {connection} · 미전송 {pending}건
         </span>
-      </summary>
-      <div className="note-offline-details">
+      </button>
+      {open && <StatusDialog title="기기 저장과 동기화" close={() => setOpen(false)}><div className="note-offline-details">
         <p>
           {state.lastSynced
             ? `마지막 서버 확인: ${new Date(state.lastSynced).toLocaleString(
@@ -106,8 +109,8 @@ export default function NoteOfflineStatus() {
               className="button secondary"
               disabled={!state.workspace.canNavigate()}
               onClick={() => {
-                if (state.workspace.canNavigate())
-                  window.location.assign("/lesson-notes?reauth=1");
+                if (state.workspace.canNavigate() && !attendanceWorkspace.getSnapshot().unsaved)
+                  window.location.assign(reauthUrl());
               }}
             >
               다시 로그인
@@ -118,7 +121,7 @@ export default function NoteOfflineStatus() {
           iPad: Safari 공유 → 홈 화면에 추가. Android: Chrome 메뉴 → 앱 설치.
           설치한 앱에서 처음 한 번 다운로드를 완료하세요.
         </p>
-      </div>
-    </details>
+      </div></StatusDialog>}
+    </div>
   );
 }

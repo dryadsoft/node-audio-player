@@ -1,3 +1,4 @@
+import RequestFailure from "../components/RequestFailure";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   closestCenter,
@@ -393,6 +394,9 @@ function Home() {
           </button>
         </nav>
 
+        <RequestFailure error={libraryQuery.error || playlistsQuery.error || (searchActive && searchQuery.error)} retry={() => {
+          void libraryQuery.refetch(); void playlistsQuery.refetch(); if (searchActive) void searchQuery.refetch();
+        }} />
         <div className="workspace">
           <section
             className={`library-panel ${mobileTab === "library" ? "mobile-active" : ""}`}
@@ -507,7 +511,7 @@ function Home() {
                   />
                 ))}
               </ul>
-              {tracks.length === 0 && !libraryQuery.isLoading && !searchQuery.isFetching ? (
+              {tracks.length === 0 && !libraryQuery.isLoading && !searchQuery.isFetching && !(searchActive ? searchQuery.isError : libraryQuery.isError) ? (
                 <div className="empty-state small">
                   <FiMusic />
                   <strong>{searchActive ? "검색 결과가 없습니다." : "이 폴더에 음악이 없습니다."}</strong>

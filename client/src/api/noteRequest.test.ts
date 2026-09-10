@@ -62,3 +62,15 @@ it("keeps the timeout active until the JSON body finishes", async () => {
   jest.advanceTimersByTime(10000);
   await rejected;
 });
+
+it("uses authentication and no-cache protection for music and lesson plans too", async () => {
+  const fetch = jest.spyOn(window, 'fetch').mockResolvedValue(response({}, 'text/html'));
+  await expect(api.playlist({ queryKey: ['library', '한글 폴더'] })).rejects.toMatchObject({ status: 401 });
+  await expect(api.lessonPlans()).rejects.toMatchObject({ status: 401 });
+  expect(fetch).toHaveBeenCalledWith('/api/lesson-plans', expect.objectContaining({ cache: 'no-store', signal: expect.any(AbortSignal) }));
+});
+
+it("accepts empty 204 mutation responses", async () => {
+  jest.spyOn(window, 'fetch').mockResolvedValue({ ...response(null, ''), status: 204 } as Response);
+  await expect(api.deletePlaylist('example')).resolves.toBeUndefined();
+});

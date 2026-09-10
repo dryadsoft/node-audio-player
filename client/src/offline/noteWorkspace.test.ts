@@ -381,3 +381,26 @@ it("converges two independent tablet databases without dropping either edit", as
     expect(record.conflicts).toHaveLength(0);
   }
 });
+
+it("recovers a rejected PWA draft and merges independently stored Safari ink", async () => {
+  const f = fixture();
+  const safari = new NoteWorkspace(new NoteStore(`safari-independent-${Date.now()}`));
+  await f.workspace.refresh(); await safari.refresh();
+  const ink = (id: string) => ({ version: 2 as const, pageCount: 2, aspectRatio: 4 / 3,
+    strokes: [{ id, page: 0, color: '#111827', width: 4 as const, points: [[.1,.2,.6,1] as [number,number,number,number]] }] });
+  await f.edit('c1:1', { inkDocument: ink('pwa-only') });
+  const upload = api.updateLessonCurriculumWeek as jest.Mock;
+  upload.mockRejectedValueOnce(new ApiError('한 주차의 필기 데이터가 너무 큽니다.', 400));
+  await f.workspace.refresh();
+  expect(f.workspace.getSnapshot().notes[0].error).toContain('400');
+  expect(safari.getSnapshot().notes[0].local.inkDocument.strokes).toHaveLength(0);
+  await f.edit('c1:1', { inkDocument: ink('safari-only') }, safari);
+  await safari.refresh();
+  await f.workspace.retry(); await safari.refresh();
+  for (const ws of [f.workspace, safari]) {
+    expect(ws.getSnapshot().notes[0].local.inkDocument.strokes.map(s => s.id).sort()).toEqual(['pwa-only', 'safari-only']);
+    expect(ws.pendingCount()).toBe(0);
+  }
+  const reopened = new NoteWorkspace(safari.store); await reopened.hydrate();
+  expect(reopened.getSnapshot().notes[0].local.inkDocument.strokes).toHaveLength(2);
+});

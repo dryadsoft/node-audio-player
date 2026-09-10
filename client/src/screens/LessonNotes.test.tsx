@@ -126,6 +126,8 @@ it("keeps local save failure visible and permits retry without losing input", as
   await screen.findByLabelText("1주차 공통 수업명");
   jest.spyOn(f.store, "change").mockRejectedValueOnce(new DOMException("full", "QuotaExceededError"));
   fireEvent.change(screen.getByLabelText("1주차 공통 수업명"), { target: { value: "보존할 입력" } });
+  await screen.findByText("저장 실패");
+  fireEvent.click(screen.getByRole("button", { name: "저장 상태 상세" }));
   await screen.findByRole("button", { name: "저장 재시도" });
   expect(screen.getByLabelText("1주차 공통 수업명")).toHaveValue("보존할 입력");
   await act(async () => { fireEvent.click(screen.getByRole("button", { name: "저장 재시도" })); });
@@ -148,4 +150,23 @@ it("refreshes local copies after an online 12-week replacement", async () => {
   await screen.findByText("공통 원본의 12주 수업명과 내용을 교체했습니다.");
   expect(screen.getByLabelText("1주차 공통 수업명")).toHaveValue("");
   expect(f.workspace.getSnapshot().notes).toHaveLength(12);
+});
+
+it("keeps the editor mounted when an in-flight save fails during a Pencil stroke", async () => {
+  const f = fixture(); await f.workspace.refresh(); mount(f.workspace);
+  await screen.findByLabelText('1주차 공통 수업명');
+  const canvas = screen.getByLabelText('Apple Pencil 필기 영역 1페이지');
+  const editor = canvas.closest('.notebook-ink-editor')!;
+  const previousSibling = editor.previousElementSibling;
+  fireEvent(canvas, pencilEvent('pointerdown', 40, 1));
+  await act(async () => {
+    await f.store.change('c1:1', n => n && {...n, version:n.version+1, error:'저장 실패 (400): 한 주차의 필기 데이터가 너무 큽니다.'});
+    await f.workspace.reload();
+  });
+  expect(screen.getByText('저장 실패')).toBeInTheDocument();
+  expect(screen.getByLabelText('Apple Pencil 필기 영역 1페이지')).toBe(canvas);
+  expect(editor.previousElementSibling).toBe(previousSibling);
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  fireEvent(window, pencilEvent('pointerup', 70, 0));
+  await waitFor(() => expect(f.workspace.getSnapshot().notes[0].local.inkDocument.strokes).toHaveLength(1));
 });

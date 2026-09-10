@@ -25,7 +25,7 @@ const EMPTY_INK: InkDocumentV2 = {
   pageCount: 2,
   strokes: [],
 };
-const MAX_INK_BYTES = 1024 * 1024;
+const MAX_INK_BYTES = 4 * 1024 * 1024;
 const MAX_INK_POINTS = 50000;
 const MAX_INK_STROKES = 5000;
 const MAX_INK_PAGES = 20;

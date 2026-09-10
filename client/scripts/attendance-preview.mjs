@@ -40,7 +40,8 @@ const { SqliteService } = require(resolve(
     backend,
     "dist/attendance/attendance.service.js"
   ));
-const app = await NestFactory.create(AppModule, { logger: false });
+const app = await NestFactory.create(AppModule, { logger: false, bodyParser: false });
+require(resolve(backend, "dist/common/body-parsers")).configureBodyParsers(app);
 await app.listen(4001, "127.0.0.1");
 const db = app.get(SqliteService),
   locations = new LessonLocationService(db),

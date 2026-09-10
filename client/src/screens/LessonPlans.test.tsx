@@ -57,6 +57,7 @@ const jsonResponse = (payload: unknown, status = 200) =>
   Promise.resolve({
     ok: status >= 200 && status < 300,
     status,
+    headers: new Headers({ "Content-Type": "application/json" }),
     json: () => Promise.resolve(payload),
   } as Response);
 
@@ -313,4 +314,12 @@ describe("LessonPlans", () => {
     );
     expect(screen.getByLabelText("1주차 수업명")).toHaveValue("봄 1주 수업");
   });
+  it("does not show an empty plan list when the network request fails", async () => {
+    (window.fetch as jest.Mock).mockRejectedValue(new TypeError('Failed to fetch'));
+    renderScreen();
+    expect(await screen.findByText('서버에 연결하지 못했습니다. 연결 상태를 확인하고 다시 시도하세요.')).toBeInTheDocument();
+    expect(screen.queryByText('조건에 맞는 계획서가 없습니다.')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', {name:'다시 시도'})).toBeEnabled();
+  });
+
 });

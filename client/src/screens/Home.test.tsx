@@ -18,6 +18,7 @@ const jsonResponse = (payload: unknown, status = 200) =>
   Promise.resolve({
     ok: status >= 200 && status < 300,
     status,
+    headers: new Headers({ "Content-Type": "application/json" }),
     json: () => Promise.resolve(payload),
   } as Response);
 
@@ -93,7 +94,7 @@ describe("Home", () => {
     fireEvent.change(screen.getByLabelText("목록 제목"), {
       target: { value: "수업 목록" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "만들기" }));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "만들기" })); });
 
     await waitFor(() =>
       expect(screen.getAllByText("수업 목록").length).toBeGreaterThan(0)
@@ -279,4 +280,14 @@ describe("Home", () => {
       expect.any(Object)
     );
   });
+  it("shows login failure rather than an empty music folder and supports retry", async () => {
+    (window.fetch as jest.Mock).mockResolvedValue({ ok: true, status: 200, headers: new Headers({'Content-Type':'text/html'}), redirected: false });
+    renderHome();
+    expect(await screen.findByText('로그인이 필요합니다. 기존 기록은 보존됩니다.')).toBeInTheDocument();
+    expect(screen.queryByText('이 폴더에 음악이 없습니다.')).not.toBeInTheDocument();
+    (window.fetch as jest.Mock).mockImplementation((input) => jsonResponse(String(input).startsWith('/api/playlist?') ? {directory: [], playlist: [{name: '복구된 곡.mp3'}]} : []));
+    fireEvent.click(screen.getByRole('button', {name:'다시 시도'}));
+    expect((await screen.findAllByText('복구된 곡.mp3')).length).toBeGreaterThan(0);
+  });
+
 });

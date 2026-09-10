@@ -1,3 +1,4 @@
+import StatusDialog from "../components/StatusDialog";
 import RecoveredInk from "../components/RecoveredInk";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -57,6 +58,7 @@ function LessonNotes() {
   const [manageDialog, setManageDialog] = useState<ManageDialog>(null);
   const [replaceSourceId, setReplaceSourceId] = useState("");
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
   const [actionError, setActionError] = useState("");
   const [actionNotice, setActionNotice] = useState("");
   const [checkingDrafts, setCheckingDrafts] = useState(false);
@@ -240,6 +242,8 @@ function LessonNotes() {
   }, [focusNotebook, menuCurriculumId, selectedWeek, detailQuery.data, draft]);
 
 
+  useEffect(() => setStatusOpen(false), [activeKey]);
+
   const saveLabel = {
     saved: "동기화 완료",
     unsaved: "기기에 저장됨 · 동기화 대기",
@@ -256,9 +260,9 @@ function LessonNotes() {
         <h1>공통 수업노트</h1>
         {detailQuery.data ? (
           <div className="notes-header-actions">
-            <span className={`save-indicator ${saveState}`} role="status">
+            <button type="button" className={`save-indicator ${saveState}`} aria-label="저장 상태 상세" aria-haspopup="dialog" onClick={() => setStatusOpen(true)}><span role="status">
               {saveState === "saved" ? <FiCheck /> : null}{saveLabel}
-            </span>
+            </span></button>
             <button
               className="button secondary curriculum-manage-button"
               type="button"
@@ -383,6 +387,20 @@ function LessonNotes() {
         <FiBookOpen aria-hidden="true" /> 학기·주차 선택
       </button>
 
+      {statusOpen && draft ? <StatusDialog title="저장 상태" close={() => setStatusOpen(false)}>
+        <p>{saveLabel}</p>
+                  {sync.error ? <div role="alert">{sync.error} <button className="button secondary" onClick={sync.retry}><FiRefreshCw /> 저장 재시도</button></div> : null}
+                  {sync.conflicts.length ? <section className="note-conflicts" aria-label="충돌 확인">
+                    <strong>충돌 확인</strong>
+                    {sync.conflicts.map(conflict => <div key={conflict.id} className="note-conflict">
+                      <b>{conflict.label}</b>
+                      {(["local", "server"] as const).map(side => <div key={side}>
+                        {typeof conflict[side] === "string" ? <pre>{conflict[side] as string || "(빈 내용)"}</pre> : conflict[side] ? <svg viewBox="0 0 1 1" aria-label={`${side === "local" ? "이 장비" : "서버"} 필기 미리보기`}><polyline fill="none" stroke="currentColor" strokeWidth="0.005" points={(conflict[side] as import("../types").InkStrokeV2).points.map(p => `${p[0]},${p[1]}`).join(" ")} /></svg> : <p>삭제된 획</p>}
+                        <button className="button secondary" onClick={() => sync.resolve(conflict, side)}>{side === "local" ? "이 장비 내용" : "서버 내용"}</button>
+                      </div>)}
+                    </div>)}
+                  </section> : null}
+      </StatusDialog> : null}
       <div className="notes-workspace">
         <aside className="curriculum-browser" aria-label="공통 수업노트 목록" ref={curriculumBrowserRef}>
           <div className="plan-browser-heading">
@@ -423,17 +441,6 @@ function LessonNotes() {
                     <input readOnly={sync.readOnly} aria-label={`${selectedWeek}주차 공통 수업명`} placeholder="수업명" value={draft.className} onChange={event => updateDraft({className: event.target.value})} />
                     <textarea readOnly={sync.readOnly} aria-label={`${selectedWeek}주차 공통 수업할 내용`} placeholder="수업내용" rows={2} value={draft.content} onChange={event => updateDraft({content: event.target.value})} />
                   </div>
-                  {sync.error ? <div role="alert">{sync.error} <button className="button secondary" onClick={sync.retry}><FiRefreshCw /> 저장 재시도</button></div> : null}
-                  {sync.conflicts.length ? <section className="note-conflicts" aria-label="충돌 확인">
-                    <strong>충돌 확인</strong>
-                    {sync.conflicts.map(conflict => <div key={conflict.id} className="note-conflict">
-                      <b>{conflict.label}</b>
-                      {(["local", "server"] as const).map(side => <div key={side}>
-                        {typeof conflict[side] === "string" ? <pre>{conflict[side] as string || "(빈 내용)"}</pre> : conflict[side] ? <svg viewBox="0 0 1 1" aria-label={`${side === "local" ? "이 장비" : "서버"} 필기 미리보기`}><polyline fill="none" stroke="currentColor" strokeWidth="0.005" points={(conflict[side] as import("../types").InkStrokeV2).points.map(p => `${p[0]},${p[1]}`).join(" ")} /></svg> : <p>삭제된 획</p>}
-                        <button className="button secondary" onClick={() => sync.resolve(conflict, side)}>{side === "local" ? "이 장비 내용" : "서버 내용"}</button>
-                      </div>)}
-                    </div>)}
-                  </section> : null}
                   {sync.readOnly ? <RecoveredInk document={draft.inkDocument} /> : <InkCanvas
                     className="notebook-ink-editor"
                     key={activeKey}
