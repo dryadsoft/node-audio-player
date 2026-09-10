@@ -59,13 +59,21 @@ function fixture() {
     ["two", page("two")],
   ]);
   let offline = false,
-    deleted = false;
+    deleted = false,
+    centerDeleted = false;
   jest.spyOn(api, "lessonLocations").mockResolvedValue([]);
   jest.spyOn(attendanceApi, "snapshot").mockImplementation(async () => {
     if (offline) throw new AttendanceError("offline");
     return {
       centers: [
-        { ...term, id: "center", locationId: "loc", weekday: 1, revision: 1 },
+        {
+          ...term,
+          id: "center",
+          locationId: "loc",
+          weekday: 1,
+          revision: 1,
+          deletedAt: centerDeleted ? "t" : null,
+        },
       ],
       periods: [
         {
@@ -120,6 +128,9 @@ function fixture() {
     offline: (v: boolean) => {
       offline = v;
     },
+    deleteCenter: (value = true) => {
+      centerDeleted = value;
+    },
     deletePeriod: () => {
       deleted = true;
     },
@@ -139,6 +150,84 @@ const edit = async (
   await ws.retry();
 };
 afterEach(() => jest.restoreAllMocks());
+it("preserves offline ink and local-only photos through center trash, restart and restoration", async () => {
+  const f = fixture();
+  await ready(f);
+  f.offline(true);
+  await edit(f.ws, "one", ink(stroke("saved-ink")));
+  const id = await f.ws.add(
+    term,
+    "period",
+    new Blob(["offline photo"]),
+    100,
+    100
+  );
+  await f.ws.sync();
+  await edit(f.ws, id, ink(stroke("new-ink")));
+  f.deleteCenter();
+  f.offline(false);
+  (attendanceApi.upload as jest.Mock).mockClear();
+  (attendanceApi.changePage as jest.Mock).mockClear();
+  await f.ws.sync();
+  for (const pageId of ["one", id]) {
+    expect(f.ws.getSnapshot().pages.find((p) => p.id === pageId)).toMatchObject(
+      { dirty: true, remoteDeleted: true }
+    );
+  }
+  expect(attendanceApi.upload).not.toHaveBeenCalled();
+  expect(attendanceApi.changePage).not.toHaveBeenCalled();
+  await expect(f.ws.add(term, "period", new Blob(), 100, 100)).rejects.toThrow(
+    "복구"
+  );
+  f.ws.edit("one", ink());
+  expect(
+    f.ws.getSnapshot().pages.find((p) => p.id === "one")!.local.inkDocument
+      .strokes
+  ).toHaveLength(1);
+  const reopened = new AttendanceWorkspace(f.store);
+  await reopened.hydrate();
+  expect(reopened.getSnapshot().catalogs[0].centers[0].deletedAt).toBe("t");
+  expect(await f.store.photo(id)).toBeInstanceOf(Blob);
+  f.deleteCenter(false);
+  await reopened.sync();
+  expect(f.remote.get("one")!.inkDocument.strokes[0].id).toBe("saved-ink");
+  expect(f.remote.get(id)!.inkDocument.strokes[0].id).toBe("new-ink");
+  expect(
+    reopened.getSnapshot().pages.every((p) => !p.dirty && !p.remoteDeleted)
+  ).toBe(true);
+});
+it("stops sending when a center is deleted after the snapshot and resumes after restoration", async () => {
+  const f = fixture();
+  await ready(f);
+  f.offline(true);
+  await edit(f.ws, "one", ink(stroke("keep")));
+  f.offline(false);
+  (attendanceApi.changePage as jest.Mock).mockImplementationOnce(async () => {
+    f.deleteCenter();
+    throw new AttendanceError("센터를 먼저 복구하세요.", 409);
+  });
+  await f.ws.sync();
+  expect(f.ws.getSnapshot().pages.find((p) => p.id === "one")).toMatchObject({
+    dirty: true,
+    remoteDeleted: true,
+  });
+  f.deleteCenter(false);
+  await f.ws.sync();
+  expect(f.remote.get("one")!.inkDocument.strokes[0].id).toBe("keep");
+});
+it("does not automatically download photos in trashed centers and reads older cached centers as active", async () => {
+  const f = fixture();
+  f.deleteCenter();
+  await ready(f);
+  expect(attendanceApi.photo).not.toHaveBeenCalled();
+  const cached = f.ws.getSnapshot().catalogs[0];
+  const { deletedAt, ...legacyCenter } = cached.centers[0];
+  await f.store.catalog("2026:fall", {
+    ...cached,
+    centers: [legacyCenter],
+  } as any);
+  expect((await f.store.hydrate()).catalogs[0].centers[0].deletedAt).toBeNull();
+});
 it("downloads all photos and restores them offline", async () => {
   const f = fixture();
   await ready(f);

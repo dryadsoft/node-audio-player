@@ -62,7 +62,13 @@ export class AttendanceStore {
     await complete;
     return {
       pages: pages as RecordPage[],
-      catalogs: catalogs as SavedCatalog[],
+      catalogs: (catalogs as SavedCatalog[]).map((catalog) => ({
+        ...catalog,
+        centers: catalog.centers.map((center) => ({
+          ...center,
+          deletedAt: center.deletedAt ?? null,
+        })),
+      })),
       target: target as Term | undefined,
       lastSync: lastSync as string | undefined,
     };

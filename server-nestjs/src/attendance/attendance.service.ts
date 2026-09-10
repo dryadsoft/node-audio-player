@@ -153,6 +153,7 @@ export class AttendanceService {
       locationId: row.location_id,
       weekday: row.weekday,
       revision: row.revision,
+      deletedAt: row.deleted_at,
     };
   }
   private period(row: any) {
@@ -207,21 +208,51 @@ export class AttendanceService {
     const loc: any = this.db()
       .prepare('SELECT * FROM lesson_locations WHERE id=?')
       .get(locationId);
-    if (!loc?.active) invalid('사용 중인 센터를 선택하세요.');
     return this.sqlite.transaction((db) => {
-      const row: any = db
-        .prepare(
-          'SELECT * FROM attendance_centers WHERE year=? AND term=? AND location_id=?',
-        )
-        .get(s.year, s.term, locationId);
+      const row =
+        input.id === undefined
+          ? undefined
+          : this.row('attendance_centers', input.id);
       if (row) {
         this.expect(row, input.expectedRevision);
+        if (
+          row.year !== s.year ||
+          row.term !== s.term ||
+          row.location_id !== locationId
+        )
+          invalid('등록된 센터의 학기와 장소는 변경할 수 없습니다.');
+        if (input.deleted !== undefined && typeof input.deleted !== 'boolean')
+          invalid();
+        if (row.deleted_at && input.deleted !== false)
+          throw new ConflictException('센터를 먼저 복구하세요.');
+      } else {
+        if (!loc?.active) invalid('사용 중인 센터를 선택하세요.');
+        if (input.expectedRevision !== undefined || input.deleted !== undefined)
+          invalid();
+      }
+      const duplicate: any = db
+        .prepare(
+          'SELECT * FROM attendance_centers WHERE year=? AND term=? AND location_id=? AND weekday=?',
+        )
+        .get(s.year, s.term, locationId, weekday);
+      if (duplicate && duplicate.id !== row?.id)
+        throw new ConflictException(
+          duplicate.deleted_at
+            ? '휴지통에 같은 센터·요일이 있습니다. 기존 등록을 복구하세요.'
+            : '이미 등록된 센터·요일입니다.',
+        );
+      if (row) {
+        const deleted =
+          input.deleted === undefined
+            ? row.deleted_at
+            : input.deleted
+            ? new Date().toISOString()
+            : null;
         db.prepare(
-          'UPDATE attendance_centers SET weekday=?,revision=revision+1 WHERE id=?',
-        ).run(weekday, row.id);
+          'UPDATE attendance_centers SET weekday=?,deleted_at=?,revision=revision+1 WHERE id=?',
+        ).run(weekday, deleted, row.id);
         return this.center(this.row('attendance_centers', row.id));
       }
-      if (input.expectedRevision !== undefined) throw new ConflictException();
       const id = randomUUID();
       db.prepare(
         'INSERT INTO attendance_centers(id,year,term,location_id,weekday) VALUES(?,?,?,?,?)',
@@ -229,10 +260,15 @@ export class AttendanceService {
       return this.center(this.row('attendance_centers', id));
     });
   }
+  private requireActiveCenter(centerId: string) {
+    if (this.row('attendance_centers', centerId).deleted_at)
+      throw new ConflictException('삭제된 센터입니다. 센터를 먼저 복구하세요.');
+  }
   createPeriod(input: any) {
     const center = this.row('attendance_centers', input.centerId),
       name = textValue(input.name),
       id = randomUUID();
+    this.requireActiveCenter(center.id);
     const loc: any = this.db()
       .prepare('SELECT active FROM lesson_locations WHERE id=?')
       .get(center.location_id);
@@ -248,6 +284,7 @@ export class AttendanceService {
   updatePeriod(id: string, input: any) {
     return this.sqlite.transaction((db) => {
       const row = this.row('attendance_periods', id);
+      this.requireActiveCenter(row.center_id);
       this.expect(row, input.expectedRevision);
       const name = input.name === undefined ? row.name : textValue(input.name),
         position =
@@ -284,7 +321,9 @@ export class AttendanceService {
       invalid('JPEG 사진을 선택하세요.');
     const size = jpegSize(file.buffer),
       hash = createHash('sha256').update(file.buffer).digest('hex');
-    this.row('attendance_periods', periodId);
+    this.requireActiveCenter(
+      this.row('attendance_periods', periodId).center_id,
+    );
     await mkdir(this.photoRoot, { recursive: true });
     const staged = resolve(this.photoRoot, `${hash}.${randomUUID()}.tmp`);
     try {
@@ -297,6 +336,9 @@ export class AttendanceService {
       });
     }
     return this.sqlite.transaction((db) => {
+      this.requireActiveCenter(
+        this.row('attendance_periods', periodId).center_id,
+      );
       const existing: any = db
         .prepare('SELECT * FROM attendance_pages WHERE id=?')
         .get(id);
@@ -338,6 +380,7 @@ export class AttendanceService {
       const row = this.row('attendance_pages', id);
       this.expect(row, input.expectedRevision);
       const period = this.row('attendance_periods', row.period_id);
+      this.requireActiveCenter(period.center_id);
       if (
         input.inkDocument !== undefined &&
         (row.deleted_at || period.deleted_at)

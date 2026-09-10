@@ -33,6 +33,72 @@ describe('Attendance API', () => {
     delete process.env.ATTENDANCE_IMAGE_DIR;
     await fs.rm(root, { recursive: true, force: true });
   });
+  it('supports weekday registrations and revision-checked center trash and restore over HTTP', async () => {
+    const http = app.getHttpServer();
+    const input = { year: 2027, term: 'spring', locationId, weekday: 1 };
+    const monday = (
+      await request(http).put('/api/attendance/centers').send(input).expect(200)
+    ).body;
+    const wednesday = (
+      await request(http)
+        .put('/api/attendance/centers')
+        .send({ ...input, weekday: 3 })
+        .expect(200)
+    ).body;
+    expect(monday.id).not.toBe(wednesday.id);
+    expect(monday.deletedAt).toBeNull();
+    await request(http).put('/api/attendance/centers').send(input).expect(409);
+    await request(http)
+      .put('/api/attendance/centers')
+      .send({ ...monday, weekday: 3, expectedRevision: 1 })
+      .expect(409);
+    const period = (
+      await request(http)
+        .post('/api/attendance/periods')
+        .send({ centerId: monday.id, name: '월요일 반' })
+        .expect(201)
+    ).body;
+    const removed = (
+      await request(http)
+        .put('/api/attendance/centers')
+        .send({ ...monday, deleted: true, expectedRevision: 1 })
+        .expect(200)
+    ).body;
+    expect(removed.deletedAt).toEqual(expect.any(String));
+    await request(http)
+      .post('/api/attendance/periods')
+      .send({ centerId: monday.id, name: '막힘' })
+      .expect(409);
+    await request(http)
+      .patch(`/api/attendance/periods/${period.id}`)
+      .send({ expectedRevision: 1, name: '막힘' })
+      .expect(409);
+    await request(http).put('/api/attendance/centers').send(input).expect(409);
+    await request(http)
+      .put('/api/attendance/centers')
+      .send({ ...removed, deleted: false, expectedRevision: 1 })
+      .expect(409);
+    await request(http)
+      .put('/api/attendance/centers')
+      .send({ ...removed, deleted: false, expectedRevision: 2 })
+      .expect(200);
+    const snapshot = (
+      await request(http)
+        .get('/api/attendance/snapshot?year=2027&term=spring')
+        .expect(200)
+    ).body;
+    expect(snapshot.centers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: monday.id,
+          revision: 3,
+          deletedAt: null,
+        }),
+        wednesday,
+      ]),
+    );
+    expect(snapshot.periods).toEqual([period]);
+  });
   it('creates arbitrary periods, persists multipart photos and rejects stale edits', async () => {
     const http = app.getHttpServer();
     const center = await request(http)

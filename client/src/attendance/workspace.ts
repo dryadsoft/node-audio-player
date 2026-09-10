@@ -10,6 +10,7 @@ import {
   SavedCatalog,
   Term,
   equal,
+  isPeriodDeleted,
   mergeInk,
   termKey,
 } from "./types";
@@ -178,6 +179,13 @@ export class AttendanceWorkspace {
     width: number,
     height: number
   ) {
+    if (
+      isPeriodDeleted(
+        this.state.catalogs.find((c) => termKey(c.semester) === termKey(t)),
+        periodId
+      )
+    )
+      throw new Error("휴지통 기록입니다. 센터와 교시를 먼저 복구하세요.");
     const id = crypto.randomUUID();
     const local: Page = {
       id,
@@ -223,7 +231,18 @@ export class AttendanceWorkspace {
   }
   edit(id: string, ink: InkDocumentV2) {
     const record = this.state.pages.find((p) => p.id === id);
-    if (!record) return;
+    if (
+      !record ||
+      record.local.deletedAt ||
+      record.remoteDeleted ||
+      isPeriodDeleted(
+        this.state.catalogs.find(
+          (c) => termKey(c.semester) === termKey(record.semester)
+        ),
+        record.local.periodId
+      )
+    )
+      return;
     const old = this.pending.get(id);
     this.pending.set(id, { base: old?.base || record.local.inkDocument, ink });
     this.publish({
@@ -347,6 +366,9 @@ export class AttendanceWorkspace {
     blob?: Blob,
     periodDeleted = false
   ) {
+    const wasDeleted = this.state.pages.find(
+      (p) => p.id === remote.id
+    )?.remoteDeleted;
     const result = await this.store
       .mutate(
         remote.id,
@@ -410,6 +432,8 @@ export class AttendanceWorkspace {
         this.storageFailure(error);
         throw error;
       });
+    if (wasDeleted && result && !result.remoteDeleted)
+      this.blocked.delete(remote.id);
     this.accept(result);
     this.signal();
   }
@@ -468,6 +492,24 @@ export class AttendanceWorkspace {
         return;
       } catch (e) {
         if (e instanceof AttendanceError && e.status === 409) {
+          // A parent may have been trashed after this cycle's snapshot.
+          // Keep the local draft and retry only after the parent is restored.
+          const catalog = await attendanceApi
+            .snapshot(r.semester)
+            .catch(() => undefined);
+          if (isPeriodDeleted(catalog, r.local.periodId)) {
+            const saved = await this.store.mutate(id, (current) =>
+              current
+                ? {
+                    ...current,
+                    remoteDeleted: true,
+                    version: current.version + 1,
+                  }
+                : undefined
+            );
+            this.accept(saved);
+            return;
+          }
           const remote = await attendanceApi.page(id).catch(() => undefined);
           if (remote) {
             await this.receive(remote, r.semester);
@@ -533,15 +575,14 @@ export class AttendanceWorkspace {
             auth: false,
           });
           const queue = catalog.pages.filter((p) => {
-            const old = this.state.pages.find((r) => r.id === p.id),
-              period = catalog.periods.find((x) => x.id === p.periodId);
+            const old = this.state.pages.find((r) => r.id === p.id);
             return (
               old?.dirty ||
               this.wanted.has(p.id) ||
               (this.state.target &&
                 termKey(this.state.target) === termKey(t) &&
                 !p.deletedAt &&
-                !period?.deletedAt)
+                !isPeriodDeleted(catalog, p.periodId))
             );
           });
           let cursor = 0;
@@ -549,19 +590,19 @@ export class AttendanceWorkspace {
             while (cursor < queue.length) {
               const meta = queue[cursor++],
                 old = this.state.pages.find((p) => p.id === meta.id),
-                period = catalog.periods.find((p) => p.id === meta.periodId);
+                parentDeleted = isPeriodDeleted(catalog, meta.periodId);
               if (
                 !old ||
                 old.base?.revision !== meta.revision ||
                 !old.photoReady ||
-                old.remoteDeleted !== !!(meta.deletedAt || period?.deletedAt)
+                old.remoteDeleted !== !!(meta.deletedAt || parentDeleted)
               ) {
                 try {
                   const page = await attendanceApi.page(meta.id),
                     blob = old?.photoReady
                       ? undefined
                       : await attendanceApi.photo(meta.id);
-                  await this.receive(page, t, blob, !!period?.deletedAt);
+                  await this.receive(page, t, blob, parentDeleted);
                 } catch (error) {
                   cycleErrors.push(error);
                 }
@@ -574,10 +615,10 @@ export class AttendanceWorkspace {
             (p) => p.dirty && termKey(p.semester) === termKey(t)
           )) {
             const deleted =
-              !!catalog.periods.find((p) => p.id === old.local.periodId)
-                ?.deletedAt ||
+              isPeriodDeleted(catalog, old.local.periodId) ||
               !!catalog.pages.find((p) => p.id === old.id)?.deletedAt;
             if (deleted !== !!old.remoteDeleted && !old.local.deletedAt) {
+              if (!deleted) this.blocked.delete(old.id);
               const updated = await this.store.mutate(old.id, (r) =>
                 r
                   ? { ...r, remoteDeleted: deleted, version: r.version + 1 }

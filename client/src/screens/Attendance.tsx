@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { InkCanvas } from "@dryadsoft/react-ink-canvas";
 import { Link } from "react-router-dom";
-import { attendanceApi } from "../attendance/api";
+import { attendanceApi, AttendanceError } from "../attendance/api";
 import { useDialogFocus } from "../attendance/useDialogFocus";
 import { useAttendance } from "../attendance/workspace";
-import { PageMeta, Period, Term, termKey, terms } from "../attendance/types";
+import {
+  PageMeta,
+  Period,
+  Term,
+  termKey,
+  terms,
+  isPeriodDeleted,
+} from "../attendance/types";
 import PhotoImport from "../attendance/PhotoImport";
 import { LessonTerm } from "../types";
 import { pwaState, subscribePwa } from "../offline/pwa";
@@ -54,7 +61,10 @@ export default function Attendance() {
   const catalog = state.catalogs.find(
     (c) => termKey(c.semester) === termKey(view)
   );
-  const centers = useMemo(() => catalog?.centers || [], [catalog]),
+  const centers = useMemo(
+      () => catalog?.centers.filter((c) => trash || !c.deletedAt) || [],
+      [catalog, trash]
+    ),
     center = centers.find((c) => c.id === centerId);
   const periods = useMemo(
     () =>
@@ -99,7 +109,7 @@ export default function Attendance() {
     readOnly = !!(
       record?.local.deletedAt ||
       record?.remoteDeleted ||
-      period?.deletedAt
+      isPeriodDeleted(catalog, periodId)
     ),
     pageIndex = pages.findIndex((p) => p.id === pageId);
   useEffect(() => {
@@ -125,9 +135,6 @@ export default function Attendance() {
     };
   }, [workspace, pageId, ready]);
   useEffect(() => {
-    if (center) setWeekday(center.weekday);
-  }, [center]);
-  useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (file || working) return;
@@ -145,9 +152,7 @@ export default function Attendance() {
   );
   const targetPages =
     targetCatalog?.pages.filter(
-      (p) =>
-        !p.deletedAt &&
-        !targetCatalog.periods.find((t) => t.id === p.periodId)?.deletedAt
+      (p) => !p.deletedAt && !isPeriodDeleted(targetCatalog, p.periodId)
     ) || [];
   const downloaded = targetPages.filter((p) =>
     state.pages.some((r) => r.id === p.id && r.photoReady && r.base)
@@ -157,6 +162,19 @@ export default function Attendance() {
     downloaded === targetPages.length &&
     ["ready", "update"].includes(pwa);
   const pending = state.pages.filter((p) => p.dirty).length;
+  const duplicateCenter = catalog?.centers.find(
+    (c) => c.locationId === locationId && c.weekday === weekday
+  );
+  const centerHasPending =
+    !!state.unsaved ||
+    state.pages.some(
+      (p) =>
+        p.dirty &&
+        catalog?.periods.some(
+          (period) =>
+            period.id === p.local.periodId && period.centerId === centerId
+        )
+    );
   const run = async (action: () => Promise<unknown>) => {
     if (!state.online) {
       setError("이 관리는 온라인에서 사용할 수 있습니다.");
@@ -168,6 +186,8 @@ export default function Attendance() {
       await action();
       await workspace.refresh();
     } catch (e) {
+      if (e instanceof AttendanceError && e.status === 409)
+        await workspace.refresh().catch(() => undefined);
       setError(e instanceof Error ? e.message : "요청에 실패했습니다.");
     } finally {
       setWorking(false);
@@ -237,7 +257,7 @@ export default function Attendance() {
           </button>
         </div>
         <button
-          disabled={!period || !!period.deletedAt}
+          disabled={!period || isPeriodDeleted(catalog, periodId)}
           onClick={() => setAddMenu(!addMenu)}
           aria-label="사진 추가"
         >
@@ -267,7 +287,7 @@ export default function Attendance() {
             : "저장 상태"}
         </button>
       </header>
-      {addMenu && (
+      {addMenu && period && !isPeriodDeleted(catalog, periodId) && (
         <div className="attendance-add-menu">
           <button onClick={() => camera.current?.click()}>카메라로 촬영</button>
           <button onClick={() => picker.current?.click()}>
@@ -369,13 +389,13 @@ export default function Attendance() {
             <div>
               <button
                 className="primary"
-                disabled={!!period.deletedAt}
+                disabled={isPeriodDeleted(catalog, periodId)}
                 onClick={() => camera.current?.click()}
               >
                 촬영하기
               </button>
               <button
-                disabled={!!period.deletedAt}
+                disabled={isPeriodDeleted(catalog, periodId)}
                 onClick={() => picker.current?.click()}
               >
                 가져오기
@@ -543,6 +563,14 @@ export default function Attendance() {
             </section>
             <section>
               <h2>센터</h2>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={trash}
+                  onChange={(e) => setTrash(e.target.checked)}
+                />{" "}
+                휴지통 포함
+              </label>
               <select
                 aria-label="센터 선택"
                 value={centerId}
@@ -551,6 +579,7 @@ export default function Attendance() {
                 <option value="">센터 선택</option>
                 {centers.map((c) => (
                   <option key={c.id} value={c.id}>
+                    {c.deletedAt ? "휴지통 · " : ""}
                     {catalog?.locations.find((l) => l.id === c.locationId)
                       ?.name || c.locationId}{" "}
                     · {weekdays[c.weekday]}
@@ -561,11 +590,10 @@ export default function Attendance() {
                 <label>
                   수업 요일
                   <select
-                    disabled={!state.online || working}
-                    value={weekday}
+                    disabled={!state.online || working || !!center.deletedAt}
+                    value={center.weekday}
                     onChange={(e) => {
                       const day = Number(e.target.value);
-                      setWeekday(day);
                       void run(() =>
                         attendanceApi.center({
                           ...center,
@@ -583,9 +611,62 @@ export default function Attendance() {
                   </select>
                 </label>
               )}
+              {center && (
+                <>
+                  <button
+                    disabled={
+                      !state.online ||
+                      working ||
+                      (!center.deletedAt && centerHasPending)
+                    }
+                    onClick={() => {
+                      const deleting = !center.deletedAt;
+                      if (
+                        deleting &&
+                        !window.confirm(
+                          `${centerName} · ${
+                            weekdays[center.weekday]
+                          }요일 등록을 휴지통으로 옮길까요? 교시·사진·필기는 보관되며 복구할 수 있습니다.`
+                        )
+                      )
+                        return;
+                      void run(async () => {
+                        await attendanceApi.center({
+                          ...center,
+                          deleted: deleting,
+                          expectedRevision: center.revision,
+                        });
+                        await workspace.refresh();
+                        if (deleting) {
+                          setTrash(false);
+                          setCenterId(
+                            centers.find(
+                              (c) => c.id !== center.id && !c.deletedAt
+                            )?.id || ""
+                          );
+                        }
+                      });
+                    }}
+                  >
+                    {center.deletedAt ? "센터 복구" : "센터 삭제"}
+                  </button>
+                  {!center.deletedAt && centerHasPending && (
+                    <p>
+                      미전송 사진·필기와 기기 저장이 완료되면 센터를 삭제할 수
+                      있습니다.
+                    </p>
+                  )}
+                  {!!center.deletedAt && (
+                    <p>
+                      센터를 먼저 복구하면 교시·사진을 다시 사용할 수 있습니다.
+                    </p>
+                  )}
+                </>
+              )}
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
+                  if (duplicateCenter) return;
                   void run(async () => {
                     const c = await attendanceApi.center({
                       ...view,
@@ -607,11 +688,7 @@ export default function Attendance() {
                   >
                     <option value="">기존 센터 선택</option>
                     {catalog?.locations
-                      .filter(
-                        (l) =>
-                          l.active &&
-                          !centers.some((c) => c.locationId === l.id)
-                      )
+                      .filter((l) => l.active)
                       .map((l) => (
                         <option key={l.id} value={l.id}>
                           {l.name}
@@ -622,6 +699,7 @@ export default function Attendance() {
                 <label>
                   요일
                   <select
+                    disabled={!state.online || working}
                     value={weekday}
                     onChange={(e) => setWeekday(Number(e.target.value))}
                   >
@@ -632,21 +710,24 @@ export default function Attendance() {
                     ))}
                   </select>
                 </label>
-                <button disabled={!state.online || !locationId || working}>
+                {duplicateCenter && (
+                  <p role="status">
+                    {duplicateCenter.deletedAt
+                      ? "휴지통에 같은 센터·요일이 있습니다. 휴지통 포함을 켜고 센터를 복구하세요."
+                      : "이미 등록된 센터·요일입니다. 다른 요일을 선택하세요."}
+                  </p>
+                )}
+                <button
+                  disabled={
+                    !state.online || !locationId || working || !!duplicateCenter
+                  }
+                >
                   센터 추가
                 </button>
               </form>
             </section>
             <section>
               <h2>교시</h2>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={trash}
-                  onChange={(e) => setTrash(e.target.checked)}
-                />{" "}
-                휴지통 포함
-              </label>
               {periods.map((p, i) => (
                 <div
                   className="attendance-manage-row"
@@ -663,7 +744,7 @@ export default function Attendance() {
                     aria-label={`${p.name} 이름`}
                     defaultValue={p.name}
                     maxLength={100}
-                    disabled={!state.online || working}
+                    disabled={!state.online || working || !!center?.deletedAt}
                     onBlur={(e) => {
                       if (e.target.value.trim() && e.target.value !== p.name)
                         void run(() =>
@@ -676,7 +757,9 @@ export default function Attendance() {
                   />
                   <button
                     aria-label={`${p.name} 위로`}
-                    disabled={i === 0 || !state.online || working}
+                    disabled={
+                      i === 0 || !state.online || working || !!center?.deletedAt
+                    }
                     onClick={() =>
                       void run(() =>
                         reorder<Period>(periods, i, -1, (item, position) =>
@@ -691,7 +774,7 @@ export default function Attendance() {
                     ↑
                   </button>
                   <button
-                    disabled={!state.online || working}
+                    disabled={!state.online || working || !!center?.deletedAt}
                     onClick={() =>
                       void run(() =>
                         attendanceApi.period(p.id, {
@@ -729,7 +812,11 @@ export default function Attendance() {
                 />
                 <button
                   disabled={
-                    !center || !state.online || working || !periodName.trim()
+                    !center ||
+                    !!center.deletedAt ||
+                    !state.online ||
+                    working ||
+                    !periodName.trim()
                   }
                 >
                   교시 추가
@@ -753,7 +840,11 @@ export default function Attendance() {
                   <button
                     aria-label={`${i + 1}페이지 위로`}
                     disabled={
-                      !state.online || working || i === 0 || !p.revision
+                      !state.online ||
+                      working ||
+                      isPeriodDeleted(catalog, periodId) ||
+                      i === 0 ||
+                      !p.revision
                     }
                     onClick={() =>
                       void run(() =>
@@ -772,6 +863,7 @@ export default function Attendance() {
                     disabled={
                       !state.online ||
                       working ||
+                      isPeriodDeleted(catalog, periodId) ||
                       !p.revision ||
                       (!p.deletedAt &&
                         state.pages.some((r) => r.id === p.id && r.dirty))
@@ -799,7 +891,7 @@ export default function Attendance() {
           </aside>
         </div>
       )}
-      {file && period && (
+      {file && period && !isPeriodDeleted(catalog, periodId) && (
         <PhotoImport
           file={file}
           onClose={() => setFile(undefined)}

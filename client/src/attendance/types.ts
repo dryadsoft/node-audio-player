@@ -20,6 +20,7 @@ export interface Center extends Term {
   locationId: string;
   weekday: number;
   revision: number;
+  deletedAt: string | null;
 }
 export interface Period {
   id: string;
@@ -47,6 +48,16 @@ export interface Catalog {
   centers: Center[];
   periods: Period[];
   pages: PageMeta[];
+}
+export function isPeriodDeleted(
+  catalog: Catalog | undefined,
+  periodId: string
+) {
+  const period = catalog?.periods.find((p) => p.id === periodId);
+  return !!(
+    period?.deletedAt ||
+    catalog?.centers.find((c) => c.id === period?.centerId)?.deletedAt
+  );
 }
 export interface Conflict {
   id: string;

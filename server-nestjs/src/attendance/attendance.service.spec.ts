@@ -57,6 +57,131 @@ describe('Attendance persistence', () => {
     expect(service.snapshot(2026, 'fall').periods).toHaveLength(8);
     expect(service.snapshot(2026, 'spring').periods).toHaveLength(0);
   });
+  it('creates independent weekdays and updates a registration by id without moving its periods', async () => {
+    const p = await upload();
+    const { id, revision, deletedAt, ...input } = center;
+    const other = service.saveCenter({ ...input, weekday: 4 });
+    expect(other.id).not.toBe(id);
+    expect(() => service.saveCenter(input)).toThrow(ConflictException);
+    expect(() =>
+      service.saveCenter({ ...center, weekday: 4, expectedRevision: revision }),
+    ).toThrow(ConflictException);
+    const changed = service.saveCenter({
+      ...center,
+      weekday: 5,
+      expectedRevision: revision,
+    });
+    expect(changed).toMatchObject({ id, weekday: 5, revision: 2 });
+    expect(service.snapshot(2026, 'fall').periods[0].centerId).toBe(id);
+    expect(service.getPage(p.id).periodId).toBe(period.id);
+    expect(() =>
+      service.saveCenter({ ...center, weekday: 6, expectedRevision: revision }),
+    ).toThrow(ConflictException);
+    expect(() =>
+      service.saveCenter({ ...changed, year: 2027, expectedRevision: 2 }),
+    ).toThrow(BadRequestException);
+    expect(service.snapshot(2026, 'fall').centers).toHaveLength(2);
+  });
+  it('trashes only the chosen registration, preserves descendants, and restores their previous trash states', async () => {
+    const p = await upload();
+    const { id, revision, deletedAt, ...input } = center;
+    const other = service.saveCenter({ ...input, weekday: 4 });
+    const spring = service.saveCenter({ ...input, term: 'spring' });
+    const trashedPeriod = service.createPeriod({
+      centerId: center.id,
+      name: '휴지통 반',
+    });
+    service.updatePeriod(trashedPeriod.id, {
+      deleted: true,
+      expectedRevision: 1,
+    });
+    service.updatePage(p.id, { deleted: true, expectedRevision: 1 });
+    const before = service.snapshot(2026, 'fall');
+    const removed = service.saveCenter({
+      ...center,
+      deleted: true,
+      expectedRevision: revision,
+    });
+    expect(removed).toMatchObject({
+      id,
+      revision: 2,
+      deletedAt: expect.any(String),
+    });
+    expect(service.snapshot(2026, 'fall').periods).toEqual(before.periods);
+    expect(service.snapshot(2026, 'fall').pages).toEqual(before.pages);
+    expect(
+      service.snapshot(2026, 'fall').centers.find((c) => c.id === other.id)
+        ?.deletedAt,
+    ).toBeNull();
+    expect(service.snapshot(2026, 'spring').centers[0]).toEqual(spring);
+    expect(
+      db.database
+        .prepare('SELECT active FROM lesson_locations WHERE id=?')
+        .get(center.locationId),
+    ).toEqual({ active: 1 });
+    expect(() => service.saveCenter(input)).toThrow('휴지통에 같은 센터·요일');
+    expect(() => service.createPeriod({ centerId: id, name: '새 반' })).toThrow(
+      ConflictException,
+    );
+    expect(() =>
+      service.updatePeriod(period.id, { name: '변경', expectedRevision: 1 }),
+    ).toThrow(ConflictException);
+    expect(() =>
+      service.updatePeriod(trashedPeriod.id, {
+        deleted: false,
+        expectedRevision: 2,
+      }),
+    ).toThrow(ConflictException);
+    expect(() =>
+      service.updatePage(p.id, { deleted: false, expectedRevision: 2 }),
+    ).toThrow(ConflictException);
+    expect(() =>
+      service.updatePage(p.id, {
+        inkDocument: p.inkDocument,
+        expectedRevision: 2,
+      }),
+    ).toThrow(ConflictException);
+    await expect(
+      service.upload('new-photo', period.id, {
+        buffer: jpeg,
+        mimetype: 'image/jpeg',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    await expect(upload()).rejects.toBeInstanceOf(ConflictException);
+    expect(await service.photo(p.id)).toEqual(jpeg);
+    expect(() =>
+      service.saveCenter({ ...removed, deleted: false, expectedRevision: 1 }),
+    ).toThrow(ConflictException);
+    const restored = service.saveCenter({
+      ...removed,
+      deleted: false,
+      expectedRevision: 2,
+    });
+    expect(restored).toMatchObject({ id, revision: 3, deletedAt: null });
+    expect(service.snapshot(2026, 'fall').periods).toEqual(before.periods);
+    expect(service.snapshot(2026, 'fall').pages).toEqual(before.pages);
+    service.updatePage(p.id, { deleted: false, expectedRevision: 2 });
+    expect(
+      service.createPeriod({ centerId: id, name: '다시 추가' }).centerId,
+    ).toBe(id);
+  });
+  it('rejects invalid center delete flags and can restore a registration at an inactive shared location', () => {
+    expect(() =>
+      service.saveCenter({ ...center, deleted: 'true', expectedRevision: 1 }),
+    ).toThrow(BadRequestException);
+    db.database
+      .prepare('UPDATE lesson_locations SET active=0 WHERE id=?')
+      .run(center.locationId);
+    const removed = service.saveCenter({
+      ...center,
+      deleted: true,
+      expectedRevision: 1,
+    });
+    expect(
+      service.saveCenter({ ...removed, deleted: false, expectedRevision: 2 })
+        .deletedAt,
+    ).toBeNull();
+  });
   it('retries upload without duplicating or resetting existing ink', async () => {
     const p = await upload();
     const ink = {

@@ -19,6 +19,116 @@ describe('SqliteService migrations', () => {
     await fs.rm(directory, { recursive: true, force: true });
   });
 
+  function legacyAttendance(orphan = false) {
+    const { DatabaseSync } = loadSqlite();
+    const legacy = new DatabaseSync(databasePath);
+    legacy.exec(`
+      PRAGMA foreign_keys=OFF;
+      CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
+      INSERT INTO schema_migrations VALUES(6,'t');
+      CREATE TABLE lesson_locations(id TEXT PRIMARY KEY);
+      INSERT INTO lesson_locations VALUES('loc');
+      CREATE TABLE attendance_centers (
+        id TEXT PRIMARY KEY, year INTEGER NOT NULL, term TEXT NOT NULL,
+        location_id TEXT NOT NULL REFERENCES lesson_locations(id),
+        weekday INTEGER NOT NULL CHECK(weekday BETWEEN 0 AND 6),
+        revision INTEGER NOT NULL DEFAULT 1, UNIQUE(year,term,location_id)
+      );
+      CREATE TABLE attendance_periods (
+        id TEXT PRIMARY KEY, center_id TEXT NOT NULL REFERENCES attendance_centers(id),
+        name TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 0,
+        revision INTEGER NOT NULL DEFAULT 1, deleted_at TEXT
+      );
+      CREATE TABLE attendance_pages (
+        id TEXT PRIMARY KEY, period_id TEXT NOT NULL REFERENCES attendance_periods(id),
+        image_hash TEXT NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL,
+        ink_json TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 0,
+        revision INTEGER NOT NULL DEFAULT 1, deleted_at TEXT, updated_at TEXT NOT NULL
+      );
+      CREATE INDEX attendance_period_center ON attendance_periods(center_id);
+      CREATE INDEX attendance_page_period ON attendance_pages(period_id);
+      INSERT INTO attendance_centers VALUES('center',2026,'fall','loc',1,8);
+      INSERT INTO attendance_periods VALUES('period','${
+        orphan ? 'missing' : 'center'
+      }','한글 반',3,5,'trashed');
+      INSERT INTO attendance_pages VALUES('page','period','hash',100,200,'{"strokes":[{"id":"keep"}]}',4,9,NULL,'updated');
+    `);
+    const before = {
+      centers: legacy.prepare('SELECT * FROM attendance_centers').all(),
+      periods: legacy.prepare('SELECT * FROM attendance_periods').all(),
+      pages: legacy.prepare('SELECT * FROM attendance_pages').all(),
+    };
+    legacy.close();
+    return before;
+  }
+
+  it('upgrades populated v6 attendance without changing ids, revisions, ink or child links and is restart-safe', () => {
+    const before = legacyAttendance();
+    for (let restart = 0; restart < 2; restart++) {
+      const sqlite = new SqliteService();
+      sqlite.onModuleInit();
+      try {
+        const db = sqlite.database;
+        expect(db.prepare('SELECT * FROM attendance_centers').all()).toEqual(
+          before.centers.map((c: any) => ({ ...c, deleted_at: null })),
+        );
+        expect(db.prepare('SELECT * FROM attendance_periods').all()).toEqual(
+          before.periods,
+        );
+        expect(db.prepare('SELECT * FROM attendance_pages').all()).toEqual(
+          before.pages,
+        );
+        expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+        expect(db.prepare('PRAGMA foreign_keys').get()).toEqual({
+          foreign_keys: 1,
+        });
+        expect(
+          db
+            .prepare('SELECT MAX(version) AS version FROM schema_migrations')
+            .get(),
+        ).toEqual({ version: 7 });
+        expect(sqlite.integrityCheck()).toBe(true);
+        db.prepare(
+          "INSERT INTO attendance_centers VALUES('other',2026,'fall','loc',3,1,NULL)",
+        ).run();
+        expect(() =>
+          db
+            .prepare(
+              "INSERT INTO attendance_centers VALUES('duplicate',2026,'fall','loc',1,1,NULL)",
+            )
+            .run(),
+        ).toThrow();
+        db.prepare("DELETE FROM attendance_centers WHERE id='other'").run();
+      } finally {
+        sqlite.onModuleDestroy();
+      }
+    }
+  });
+
+  it('rolls back the v7 replacement and re-enables foreign keys if reference validation fails', () => {
+    const before = legacyAttendance(true);
+    const sqlite = new SqliteService();
+    try {
+      expect(() => sqlite.onModuleInit()).toThrow('참조 검증');
+      expect(
+        sqlite.database.prepare('SELECT * FROM attendance_centers').all(),
+      ).toEqual(before.centers);
+      expect(
+        sqlite.database.prepare('SELECT * FROM attendance_pages').all(),
+      ).toEqual(before.pages);
+      expect(
+        sqlite.database
+          .prepare('SELECT MAX(version) AS version FROM schema_migrations')
+          .get(),
+      ).toEqual({ version: 6 });
+      expect(sqlite.database.prepare('PRAGMA foreign_keys').get()).toEqual({
+        foreign_keys: 1,
+      });
+    } finally {
+      sqlite.onModuleDestroy();
+    }
+  });
+
   it('upgrades v1 plans without losing ids, revisions, or weeks', () => {
     const { DatabaseSync } = loadSqlite();
     const legacy = new DatabaseSync(databasePath, {
@@ -95,7 +205,7 @@ describe('SqliteService migrations', () => {
         sqlite.database
           .prepare('SELECT MAX(version) AS version FROM schema_migrations')
           .get(),
-      ).toEqual({ version: 6 });
+      ).toEqual({ version: 7 });
       expect(
         sqlite.database
           .prepare(

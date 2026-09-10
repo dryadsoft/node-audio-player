@@ -8,7 +8,7 @@ import { mkdirSync } from 'fs';
 import { dirname, resolve } from 'path';
 import { loadSqlite, SqliteDatabase } from './sqlite.types';
 
-const MIGRATION_VERSION = 6;
+const MIGRATION_VERSION = 7;
 
 @Injectable()
 export class SqliteService implements OnModuleInit, OnModuleDestroy {
@@ -87,6 +87,40 @@ export class SqliteService implements OnModuleInit, OnModuleDestroy {
       version <= MIGRATION_VERSION;
       version += 1
     ) {
+      if (version === 7) {
+        // SQLite requires foreign keys to be disabled outside the transaction
+        // when replacing a referenced table to change its UNIQUE constraint.
+        this.database.exec('PRAGMA foreign_keys = OFF');
+        try {
+          this.transaction((database) => {
+            database.exec(`
+              CREATE TABLE attendance_centers_new (
+                id TEXT PRIMARY KEY, year INTEGER NOT NULL, term TEXT NOT NULL,
+                location_id TEXT NOT NULL REFERENCES lesson_locations(id),
+                weekday INTEGER NOT NULL CHECK(weekday BETWEEN 0 AND 6),
+                revision INTEGER NOT NULL DEFAULT 1, deleted_at TEXT,
+                UNIQUE(year,term,location_id,weekday)
+              );
+              INSERT INTO attendance_centers_new
+                SELECT id,year,term,location_id,weekday,revision,NULL FROM attendance_centers;
+              DROP TABLE attendance_centers;
+              ALTER TABLE attendance_centers_new RENAME TO attendance_centers;
+            `);
+            if (database.prepare('PRAGMA foreign_key_check').all().length)
+              throw new Error(
+                '출석부 마이그레이션의 참조 검증에 실패했습니다.',
+              );
+            database
+              .prepare(
+                'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)',
+              )
+              .run(version, new Date().toISOString());
+          });
+        } finally {
+          this.database.exec('PRAGMA foreign_keys = ON');
+        }
+        continue;
+      }
       this.transaction((database) => {
         if (version === 1) {
           database.exec(`
