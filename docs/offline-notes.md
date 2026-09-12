@@ -95,3 +95,11 @@ PLAYWRIGHT_MODULE=/path/to/playwright node scripts/pwa-update-check.mjs /tmp/nmp
 - 잘못된 업데이트 자산 거절, 새로고침 1회 적용, 다른 탭·이전 캐시 유지, 한글 조합·관리 입력 중 적용 차단을 확인합니다.
 - fixture 서버를 실제로 닫고 이전 JS 자산 요청, 오프라인 글·필기 저장 후 업데이트, 오프라인 재실행·재접속 동기화를 확인합니다. 운영 데이터는 사용하지 않습니다.
 - 실제 iPad/Pencil·설치 PWA·로그인한 운영 UI 검증은 별도입니다.
+
+### 2026-09-12 배포 검증 기록
+
+- 기능 커밋 `b8c18a1`을 `origin/master`에 푸시하고 Pi에 배포했습니다. 빌드 ID는 `b8c18a1-1789191066977-f71156`, 릴리스는 `/home/pi/releases/node-audio-player-b8c18a1`입니다.
+- Node.js 22.23.2에서 클라이언트 전체 테스트 117개와 production 빌드가 통과했습니다. 최종 빌드 대상으로 Chromium A→B 검증도 통과했습니다: 잘못된 업데이트 유지, 새로고침 1회 적용, 다른 탭·캐시 보존, IME/관리 입력 차단, 서버 정지 상태의 이전 자산 조회·글과 필기 저장·업데이트·재실행·재접속 동기화.
+- `/home/pi/backups/node-audio-player-b8c18a1-20260912T053316Z`에 기존 클라이언트·설정 및 DB·사진 백업을 보관했습니다. 백엔드와 DB 스키마는 변경하지 않았습니다.
+- 운영 소스·자산 100개가 릴리스 해시와 일치했습니다. 내부 `/attendance`, `/lesson-notes`, `/`, HTML·서비스 워커·버전 정보의 재검증 헤더 및 manifest 자산의 본문·immutable 헤더를 확인했습니다. 출석부 API 200, SQLite schema 8·integrity/FK 검사, 음원 Range 206·응답 바이트가 통과했습니다.
+- Nginx 설정 검사 후 graceful reload를 수행했습니다. 실제 iPad/Pencil·설치 PWA 및 인증된 운영 UI 검증은 미실시입니다.
