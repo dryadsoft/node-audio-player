@@ -33,7 +33,8 @@ export interface Period {
 export interface PageMeta {
   id: string;
   periodId: string;
-  imageHash: string;
+  pageType: "photo" | "note";
+  imageHash: string | null;
   width: number;
   height: number;
   position: number;
@@ -41,6 +42,14 @@ export interface PageMeta {
   deletedAt: string | null;
   updatedAt: string;
 }
+export const NOTE_WIDTH = 1000;
+export const NOTE_HEIGHT = 1414;
+export const normalizePage = <T extends PageMeta>(page: T): T => ({
+  ...page,
+  pageType: page.pageType ?? "photo",
+});
+export const pageReady = (record: RecordPage) =>
+  record.local.pageType === "note" || record.photoReady;
 export interface Page extends PageMeta {
   inkDocument: InkDocumentV2;
 }

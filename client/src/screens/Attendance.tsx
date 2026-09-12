@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { InkCanvas } from "@dryadsoft/react-ink-canvas";
+import { InkCanvas, InkNoteBackground } from "@dryadsoft/react-ink-canvas";
 import { Link } from "react-router-dom";
 import { attendanceApi, AttendanceError } from "../attendance/api";
 import { useDialogFocus } from "../attendance/useDialogFocus";
 import { useAttendance } from "../attendance/workspace";
 import {
   PageMeta,
+  pageReady,
   Period,
   Term,
   termKey,
@@ -106,6 +107,7 @@ export default function Attendance() {
   }, [pages, pageId]);
   const record = state.pages.find((p) => p.id === pageId),
     ready = record?.photoReady,
+    isNote = record?.local.pageType === "note",
     readOnly = !!(
       record?.local.deletedAt ||
       record?.remoteDeleted ||
@@ -117,7 +119,7 @@ export default function Attendance() {
   }, [workspace, pageId]);
   useEffect(() => {
     setPhoto("");
-    if (!pageId || !ready) return;
+    if (!pageId || !ready || isNote) return;
     let live = true,
       url = "";
     void workspace.store
@@ -133,7 +135,7 @@ export default function Attendance() {
       live = false;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [workspace, pageId, ready]);
+  }, [workspace, pageId, ready, isNote]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -155,7 +157,7 @@ export default function Attendance() {
       (p) => !p.deletedAt && !isPeriodDeleted(targetCatalog, p.periodId)
     ) || [];
   const downloaded = targetPages.filter((p) =>
-    state.pages.some((r) => r.id === p.id && r.photoReady && r.base)
+    state.pages.some((r) => r.id === p.id && pageReady(r) && r.base)
   ).length;
   const offlineReady =
     !!targetCatalog &&
@@ -189,6 +191,20 @@ export default function Attendance() {
       if (e instanceof AttendanceError && e.status === 409)
         await workspace.refresh().catch(() => undefined);
       setError(e instanceof Error ? e.message : "요청에 실패했습니다.");
+    } finally {
+      setWorking(false);
+    }
+  };
+  const addNote = async () => {
+    if (working || !period || isPeriodDeleted(catalog, periodId)) return;
+    setWorking(true);
+    setError("");
+    setAddMenu(false);
+    try {
+      const id = await workspace.addNote(view, periodId);
+      setPageId(id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "노트를 추가하지 못했습니다.");
     } finally {
       setWorking(false);
     }
@@ -239,17 +255,19 @@ export default function Attendance() {
         </button>
         <div className="attendance-page-control">
           <button
-            aria-label="이전 사진"
+            aria-label="이전 페이지"
             disabled={pageIndex <= 0}
             onClick={() => setPageId(pages[pageIndex - 1].id)}
           >
             ‹
           </button>
           <button onClick={() => setPanel(true)}>
-            {pages.length ? `${pageIndex + 1} / ${pages.length}` : "사진 없음"}
+            {pages.length
+              ? `${pageIndex + 1} / ${pages.length}`
+              : "페이지 없음"}
           </button>
           <button
-            aria-label="다음 사진"
+            aria-label="다음 페이지"
             disabled={pageIndex < 0 || pageIndex >= pages.length - 1}
             onClick={() => setPageId(pages[pageIndex + 1].id)}
           >
@@ -259,7 +277,7 @@ export default function Attendance() {
         <button
           disabled={!period || isPeriodDeleted(catalog, periodId)}
           onClick={() => setAddMenu(!addMenu)}
-          aria-label="사진 추가"
+          aria-label="페이지 추가"
         >
           ＋
         </button>
@@ -289,6 +307,9 @@ export default function Attendance() {
       </header>
       {addMenu && period && !isPeriodDeleted(catalog, periodId) && (
         <div className="attendance-add-menu">
+          <button disabled={working} onClick={() => void addNote()}>
+            줄노트 추가
+          </button>
           <button onClick={() => camera.current?.click()}>카메라로 촬영</button>
           <button onClick={() => picker.current?.click()}>
             사진·파일 가져오기
@@ -385,10 +406,16 @@ export default function Attendance() {
         ) : !pages.length ? (
           <div className="attendance-empty">
             <strong>{period.name} 출석부</strong>
-            <p>종이를 가져오면 바로 체크하고 메모할 수 있습니다.</p>
+            <p>줄노트를 추가하거나 사진을 가져와 바로 필기하세요.</p>
             <div>
               <button
                 className="primary"
+                disabled={working || isPeriodDeleted(catalog, periodId)}
+                onClick={() => void addNote()}
+              >
+                줄노트 추가
+              </button>
+              <button
                 disabled={isPeriodDeleted(catalog, periodId)}
                 onClick={() => camera.current?.click()}
               >
@@ -402,12 +429,12 @@ export default function Attendance() {
               </button>
             </div>
           </div>
-        ) : !record || !photo ? (
+        ) : !record || (!isNote && !photo) ? (
           <div className="attendance-empty">
             <p>
               {state.online
-                ? "사진을 준비하고 있습니다."
-                : "아직 이 사진이 기기에 저장되지 않았습니다."}
+                ? "페이지를 준비하고 있습니다."
+                : "아직 이 페이지가 기기에 저장되지 않았습니다."}
             </p>
             <button onClick={() => void workspace.retry()}>다시 시도</button>
           </div>
@@ -416,8 +443,21 @@ export default function Attendance() {
             {readOnly ? (
               <div className="attendance-recovery">
                 <p>휴지통 기록입니다. 복구하면 계속 필기할 수 있습니다.</p>
-                <div style={{ position: "relative" }}>
-                  <img src={photo} alt="복구할 출석부" />
+                <div
+                  style={{
+                    position: "relative",
+                    aspectRatio: String(
+                      record.local.width / record.local.height
+                    ),
+                  }}
+                >
+                  {isNote ? (
+                    <InkNoteBackground
+                      aspectRatio={record.local.inkDocument.aspectRatio}
+                    />
+                  ) : (
+                    <img src={photo} alt="복구할 출석부" />
+                  )}
                   <svg viewBox="0 0 1 1" preserveAspectRatio="none">
                     {record.local.inkDocument.strokes.map((s) => (
                       <polyline
@@ -446,7 +486,8 @@ export default function Attendance() {
                 <InkCanvas
                   key={pageId}
                   document={record.local.inkDocument}
-                  backgroundImage={photo}
+                  mode={isNote ? "note" : "drawing"}
+                  backgroundImage={isNote ? undefined : photo}
                   fixedPage
                   compactTools
                   touchBehavior={touchDraw ? "draw" : "pan-zoom"}
@@ -454,8 +495,12 @@ export default function Attendance() {
                   historyResetKey={record.historyKey || 0}
                   onChange={(ink) => workspace.edit(pageId, ink)}
                   labels={{
-                    clearConfirm: "이 사진 위의 필기를 모두 지울까요?",
-                    canvas: "출석부 사진 위 필기",
+                    clearConfirm: isNote
+                      ? "이 노트의 필기를 모두 지울까요?"
+                      : "이 사진 위의 필기를 모두 지울까요?",
+                    canvas: isNote
+                      ? "출석부 줄노트 필기"
+                      : "출석부 사진 위 필기",
                   }}
                 />
               </>
@@ -626,7 +671,7 @@ export default function Attendance() {
                         !window.confirm(
                           `${centerName} · ${
                             weekdays[center.weekday]
-                          }요일 등록을 휴지통으로 옮길까요? 교시·사진·필기는 보관되며 복구할 수 있습니다.`
+                          }요일 등록을 휴지통으로 옮길까요? 교시·사진·노트·필기는 보관되며 복구할 수 있습니다.`
                         )
                       )
                         return;
@@ -652,13 +697,14 @@ export default function Attendance() {
                   </button>
                   {!center.deletedAt && centerHasPending && (
                     <p>
-                      미전송 사진·필기와 기기 저장이 완료되면 센터를 삭제할 수
+                      미전송 페이지·필기와 기기 저장이 완료되면 센터를 삭제할 수
                       있습니다.
                     </p>
                   )}
                   {!!center.deletedAt && (
                     <p>
-                      센터를 먼저 복구하면 교시·사진을 다시 사용할 수 있습니다.
+                      센터를 먼저 복구하면 교시·페이지를 다시 사용할 수
+                      있습니다.
                     </p>
                   )}
                 </>
@@ -824,7 +870,7 @@ export default function Attendance() {
               </form>
             </section>
             <section>
-              <h2>사진 · {period?.name || "교시를 선택하세요"}</h2>
+              <h2>페이지 · {period?.name || "교시를 선택하세요"}</h2>
               {pages.map((p, i) => (
                 <div className="attendance-manage-row" key={p.id}>
                   <button
@@ -835,7 +881,7 @@ export default function Attendance() {
                     }}
                   >
                     {p.deletedAt ? "휴지통 · " : ""}
-                    {i + 1}페이지
+                    {i + 1}페이지 · {p.pageType === "note" ? "줄노트" : "사진"}
                   </button>
                   <button
                     aria-label={`${i + 1}페이지 위로`}

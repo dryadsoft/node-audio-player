@@ -1,4 +1,4 @@
-import { RecordPage, SavedCatalog, Term } from "./types";
+import { RecordPage, SavedCatalog, Term, normalizePage } from "./types";
 const result = <T>(r: IDBRequest<T>) =>
   new Promise<T>((resolve, reject) => {
     r.onsuccess = () => resolve(r.result);
@@ -61,9 +61,14 @@ export class AttendanceStore {
     ]);
     await complete;
     return {
-      pages: pages as RecordPage[],
+      pages: (pages as RecordPage[]).map((record) => ({
+        ...record,
+        local: normalizePage(record.local),
+        base: record.base && normalizePage(record.base),
+      })),
       catalogs: (catalogs as SavedCatalog[]).map((catalog) => ({
         ...catalog,
+        pages: catalog.pages.map(normalizePage),
         centers: catalog.centers.map((center) => ({
           ...center,
           deletedAt: center.deletedAt ?? null,

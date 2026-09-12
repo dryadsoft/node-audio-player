@@ -271,6 +271,7 @@ describe('Attendance persistence', () => {
   it('backs up a matching SQLite snapshot and immutable photos including trash', async () => {
     const p = await upload();
     service.updatePage(p.id, { expectedRevision: 1, deleted: true });
+    service.createNote('mixed-note', { periodId: period.id });
     const destination = resolve(root, 'backup');
     await backupAttendance(db.dataPath, service.photoRoot, destination);
     const manifest = JSON.parse(
@@ -283,5 +284,106 @@ describe('Attendance persistence', () => {
         resolve(destination, 'attendance', `${p.imageHash}.jpg`),
       ),
     ).toEqual(jpeg);
+  });
+  it('creates a photo-free note idempotently and preserves ink through sorting and trash', async () => {
+    const note = service.createNote('note-1', { periodId: period.id });
+    expect(note).toMatchObject({
+      pageType: 'note',
+      imageHash: null,
+      width: 1000,
+      height: 1414,
+    });
+    const ink = {
+      ...note.inkDocument,
+      strokes: [
+        {
+          id: 'note-stroke',
+          page: 0,
+          color: '#111827',
+          width: 2,
+          points: [[0.1, 0.2, 0.5, 0]],
+        },
+      ],
+    };
+    const saved = service.updatePage(note.id, {
+      expectedRevision: 1,
+      inkDocument: ink,
+      position: 4,
+    });
+    expect(service.createNote(note.id, { periodId: period.id })).toEqual(saved);
+    await expect(service.photo(note.id)).rejects.toThrow('사진이 없는 노트');
+    expect(
+      service.snapshot(2026, 'fall').pages.find((p: any) => p.id === note.id)
+        .pageType,
+    ).toBe('note');
+    service.updatePage(note.id, { expectedRevision: 2, deleted: true });
+    expect(() =>
+      service.updatePage(note.id, { expectedRevision: 3, inkDocument: ink }),
+    ).toThrow(ConflictException);
+    const restored = service.updatePage(note.id, {
+      expectedRevision: 3,
+      deleted: false,
+    });
+    expect(restored.inkDocument).toEqual(ink);
+    expect(restored.position).toBe(4);
+    expect(() =>
+      service.updatePage(note.id, { expectedRevision: 1, inkDocument: ink }),
+    ).toThrow(ConflictException);
+    const other = service.createPeriod({
+      centerId: center.id,
+      name: '다른 반',
+    });
+    expect(() => service.createNote(note.id, { periodId: other.id })).toThrow(
+      ConflictException,
+    );
+    await expect(
+      service.upload(note.id, period.id, {
+        buffer: jpeg,
+        mimetype: 'image/jpeg',
+      }),
+    ).rejects.toThrow(ConflictException);
+    const photo = await upload();
+    expect(() => service.createNote(photo.id, { periodId: period.id })).toThrow(
+      ConflictException,
+    );
+  });
+  it('rejects note creation below deleted parents and backs up notes without photo files', async () => {
+    service.createNote('note-backup', { periodId: period.id });
+    const destination = resolve(root, 'notes-backup');
+    await backupAttendance(db.dataPath, service.photoRoot, destination);
+    expect(
+      JSON.parse(
+        await fs.readFile(resolve(destination, 'manifest.json'), 'utf8'),
+      ),
+    ).toMatchObject({ images: [], complete: true });
+    const { DatabaseSync } = await import('../database/sqlite.types').then(
+      (m) => m.loadSqlite(),
+    );
+    const copy = new DatabaseSync(resolve(destination, 'lesson-plans.sqlite'));
+    try {
+      expect(
+        copy
+          .prepare(
+            "SELECT page_type FROM attendance_pages WHERE id='note-backup'",
+          )
+          .get(),
+      ).toEqual({ page_type: 'note' });
+    } finally {
+      copy.close();
+    }
+    service.updatePeriod(period.id, { expectedRevision: 1, deleted: true });
+    expect(() =>
+      service.createNote('deleted-period', { periodId: period.id }),
+    ).toThrow(ConflictException);
+    service.saveCenter({ ...center, expectedRevision: 1, deleted: true });
+    expect(() =>
+      service.createNote('deleted-center', { periodId: period.id }),
+    ).toThrow(ConflictException);
+    expect(() => service.createNote('../bad', { periodId: period.id })).toThrow(
+      BadRequestException,
+    );
+    expect(() => service.createNote('bad-period', {})).toThrow(
+      BadRequestException,
+    );
   });
 });

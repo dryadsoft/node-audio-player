@@ -161,4 +161,73 @@ describe('Attendance API', () => {
       })
       .expect(413);
   });
+  it('creates and syncs ruled notes over JSON without any photo request', async () => {
+    const http = app.getHttpServer();
+    const center = (
+      await request(http)
+        .put('/api/attendance/centers')
+        .send({ year: 2028, term: 'spring', locationId, weekday: 1 })
+        .expect(200)
+    ).body;
+    const period = (
+      await request(http)
+        .post('/api/attendance/periods')
+        .send({ centerId: center.id, name: '줄노트 반' })
+        .expect(201)
+    ).body;
+    const path = '/api/attendance/pages/note-http';
+    const note = (
+      await request(http)
+        .put(path + '/note')
+        .send({ periodId: period.id })
+        .expect(200)
+    ).body;
+    expect(note).toMatchObject({
+      pageType: 'note',
+      imageHash: null,
+      width: 1000,
+      height: 1414,
+    });
+    const ink = {
+      ...note.inkDocument,
+      strokes: [
+        {
+          id: 'written',
+          page: 0,
+          color: '#111827',
+          width: 2,
+          points: [[0.2, 0.3, 0.5, 0]],
+        },
+      ],
+    };
+    const saved = (
+      await request(http)
+        .patch(path)
+        .send({ expectedRevision: 1, inkDocument: ink })
+        .expect(200)
+    ).body;
+    expect(
+      (
+        await request(http)
+          .put(path + '/note')
+          .send({ periodId: period.id })
+          .expect(200)
+      ).body,
+    ).toEqual(saved);
+    await request(http)
+      .get(path + '/photo')
+      .expect(404);
+    await request(http)
+      .patch(path)
+      .send({ expectedRevision: 1, inkDocument: ink })
+      .expect(409);
+    const snapshot = (
+      await request(http)
+        .get('/api/attendance/snapshot?year=2028&term=spring')
+        .expect(200)
+    ).body;
+    expect(snapshot.pages).toEqual([
+      expect.objectContaining({ pageType: 'note', imageHash: null }),
+    ]);
+  });
 });

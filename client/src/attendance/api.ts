@@ -1,4 +1,4 @@
-import { Catalog, Center, Page, Period, Term } from "./types";
+import { Catalog, Center, Page, Period, Term, normalizePage } from "./types";
 export class AttendanceError extends Error {
   constructor(message: string, readonly status = 0) {
     super(message);
@@ -58,7 +58,9 @@ async function request<T>(
 }
 export const attendanceApi = {
   snapshot: (t: Term) =>
-    request<Catalog>(`snapshot?year=${t.year}&term=${t.term}`),
+    request<Catalog>(`snapshot?year=${t.year}&term=${t.term}`).then(
+      (catalog) => ({ ...catalog, pages: catalog.pages.map(normalizePage) })
+    ),
   center: (input: unknown) =>
     request<Center>("centers", { method: "PUT", body: JSON.stringify(input) }),
   createPeriod: (centerId: string, name: string) =>
@@ -71,12 +73,18 @@ export const attendanceApi = {
       method: "PATCH",
       body: JSON.stringify(input),
     }),
-  page: (id: string) => request<Page>(`pages/${encodeURIComponent(id)}`),
+  page: (id: string) =>
+    request<Page>(`pages/${encodeURIComponent(id)}`).then(normalizePage),
+  createNote: (id: string, periodId: string) =>
+    request<Page>(`pages/${encodeURIComponent(id)}/note`, {
+      method: "PUT",
+      body: JSON.stringify({ periodId }),
+    }).then(normalizePage),
   changePage: (id: string, input: unknown) =>
     request<Page>(`pages/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: JSON.stringify(input),
-    }),
+    }).then(normalizePage),
   photo: (id: string) =>
     request<Blob>(`pages/${encodeURIComponent(id)}/photo`, {}, true),
   upload: (id: string, periodId: string, blob: Blob) => {
@@ -87,6 +95,6 @@ export const attendanceApi = {
       `pages/${encodeURIComponent(id)}/photo`,
       { method: "PUT", body },
       true
-    );
+    ).then(normalizePage);
   },
 };

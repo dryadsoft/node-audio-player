@@ -41,6 +41,10 @@ export class AttendanceController {
   @Patch('pages/:id') pageChange(@Param('id') id: string, @Body() body: any) {
     return this.service.updatePage(id, body || {});
   }
+  @Put('pages/:id/note')
+  note(@Param('id') id: string, @Body() body: any) {
+    return this.service.createNote(id, body || {});
+  }
   @Put('pages/:id/photo')
   @UseInterceptors(
     FileInterceptor('photo', {

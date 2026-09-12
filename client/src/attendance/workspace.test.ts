@@ -3,7 +3,7 @@ import { api } from "../api";
 import { attendanceApi, AttendanceError } from "./api";
 import { AttendanceStore } from "./store";
 import { AttendanceWorkspace } from "./workspace";
-import { Page, Term } from "./types";
+import { Page, Term, pageReady } from "./types";
 import { InkDocumentV2, InkStrokeV2 } from "../types";
 Object.defineProperty(global, "structuredClone", {
   configurable: true,
@@ -44,6 +44,7 @@ const ink = (...s: InkStrokeV2[]): InkDocumentV2 => ({
 const page = (id: string): Page => ({
   id,
   periodId: "period",
+  pageType: "photo",
   imageHash: "hash",
   width: 100,
   height: 100,
@@ -118,6 +119,22 @@ function fixture() {
       delete (next as any).expectedRevision;
       remote.set(id, clone(next));
       return clone(next);
+    });
+  jest
+    .spyOn(attendanceApi, "createNote")
+    .mockImplementation(async (id, periodId) => {
+      if (offline) throw new AttendanceError("offline");
+      const p = remote.get(id) || {
+        ...page(id),
+        periodId,
+        pageType: "note" as const,
+        imageHash: null,
+        width: 1000,
+        height: 1414,
+        inkDocument: { ...ink(), aspectRatio: 1000 / 1414 },
+      };
+      remote.set(id, clone(p));
+      return clone(p);
     });
   const store = new AttendanceStore(`attendance-${++serial}`),
     ws = new AttendanceWorkspace(store);
@@ -429,4 +446,134 @@ it("clears a recovered storage warning after successfully preparing photos", asy
   await f.ws.retry();
   expect(f.ws.getSnapshot().storageError).toBe("");
   expect(f.ws.getSnapshot().pages).toHaveLength(2);
+});
+
+it("creates an offline note without a Blob, restores it and retries creation without losing newer ink", async () => {
+  const f = fixture();
+  await ready(f);
+  f.offline(true);
+  const id = await f.ws.addNote(term, "period");
+  const noteInk = { ...ink(stroke("written")), aspectRatio: 1000 / 1414 };
+  await edit(f.ws, id, noteInk);
+  expect(await f.store.photo(id)).toBeUndefined();
+  const reopened = new AttendanceWorkspace(f.store);
+  await reopened.hydrate();
+  const record = reopened.getSnapshot().pages.find((p) => p.id === id)!;
+  expect(record.local.inkDocument).toEqual(noteInk);
+  expect(record.local.imageHash).toBeNull();
+  expect(record.photoReady).toBe(false);
+  expect(pageReady(record)).toBe(true);
+  (attendanceApi.photo as jest.Mock).mockClear();
+  (attendanceApi.upload as jest.Mock).mockClear();
+  let calls = 0;
+  (attendanceApi.createNote as jest.Mock).mockImplementation(
+    async (key: string, periodId: string) => {
+      const remote = f.remote.get(key) || {
+        ...record.local,
+        revision: 1,
+        inkDocument: { ...noteInk, strokes: [] },
+      };
+      f.remote.set(key, remote);
+      if (++calls === 1) throw new AttendanceError("lost acknowledgement");
+      return clone(remote);
+    }
+  );
+  f.offline(false);
+  await reopened.sync();
+  expect(reopened.getSnapshot().pages.find((p) => p.id === id)!.dirty).toBe(
+    true
+  );
+  await reopened.retry();
+  expect(f.remote.get(id)!.inkDocument).toEqual(noteInk);
+  expect(reopened.getSnapshot().pages.find((p) => p.id === id)!.dirty).toBe(
+    false
+  );
+  expect(attendanceApi.upload).not.toHaveBeenCalled();
+  expect(attendanceApi.photo).not.toHaveBeenCalled();
+  expect(f.remote.size).toBe(3);
+});
+it("downloads note metadata and ink without photo files and restores note drafts after parent recovery", async () => {
+  const f = fixture();
+  const note = {
+    ...page("note"),
+    pageType: "note" as const,
+    imageHash: null,
+    width: 1000,
+    height: 1414,
+    inkDocument: { ...ink(), aspectRatio: 1000 / 1414 },
+  };
+  f.remote.set(note.id, note);
+  await ready(f);
+  expect(
+    (attendanceApi.photo as jest.Mock).mock.calls.map((c) => c[0])
+  ).not.toContain(note.id);
+  expect(
+    pageReady(f.ws.getSnapshot().pages.find((p) => p.id === note.id)!)
+  ).toBe(true);
+  f.offline(true);
+  await edit(f.ws, note.id, {
+    ...note.inkDocument,
+    strokes: [stroke("draft")],
+  });
+  f.deleteCenter(true);
+  f.offline(false);
+  await f.ws.sync();
+  expect(
+    f.ws.getSnapshot().pages.find((p) => p.id === note.id)!.remoteDeleted
+  ).toBe(true);
+  const reopened = new AttendanceWorkspace(f.store);
+  await reopened.hydrate();
+  expect(
+    reopened.getSnapshot().pages.find((p) => p.id === note.id)!.local
+      .inkDocument.strokes[0].id
+  ).toBe("draft");
+  f.deleteCenter(false);
+  await reopened.sync();
+  expect(f.remote.get(note.id)!.inkDocument.strokes[0].id).toBe("draft");
+  expect(
+    reopened.getSnapshot().pages.find((p) => p.id === note.id)!.dirty
+  ).toBe(false);
+});
+it("normalizes legacy photo cache fields and does not expose a note after failed local creation", async () => {
+  const f = fixture();
+  await ready(f);
+  await f.store.mutate("one", (old) => {
+    const record = clone(old!);
+    delete (record.local as any).pageType;
+    delete (record.base as any).pageType;
+    return record;
+  });
+  const cached = await f.store.hydrate();
+  expect(cached.pages.find((p) => p.id === "one")!.local.pageType).toBe(
+    "photo"
+  );
+  expect(cached.pages.find((p) => p.id === "one")!.base!.pageType).toBe(
+    "photo"
+  );
+  jest
+    .spyOn(f.store, "mutate")
+    .mockRejectedValueOnce(new Error("QuotaExceededError"));
+  await expect(f.ws.addNote(term, "period")).rejects.toThrow(
+    "QuotaExceededError"
+  );
+  expect(f.ws.getSnapshot().pages).toHaveLength(2);
+  expect(f.ws.getSnapshot().storageError).toContain("QuotaExceededError");
+});
+
+it("retains a local note when its id is already used by a remote photo", async () => {
+  const f = fixture();
+  await ready(f);
+  f.offline(true);
+  const id = await f.ws.addNote(term, "period");
+  const localInk = { ...ink(stroke("keep-note")), aspectRatio: 1000 / 1414 };
+  await edit(f.ws, id, localInk);
+  f.remote.set(id, page(id));
+  f.offline(false);
+  await f.ws.sync();
+  const record = f.ws.getSnapshot().pages.find((p) => p.id === id)!;
+  expect(record.local.pageType).toBe("note");
+  expect(record.local.inkDocument).toEqual(localInk);
+  expect(record.dirty).toBe(true);
+  expect(record.error).toContain("식별자");
+  expect(f.remote.get(id)!.pageType).toBe("photo");
 });

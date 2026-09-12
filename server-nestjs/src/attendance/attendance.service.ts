@@ -119,7 +119,7 @@ export function validateInk(v: any, ratio: number) {
   });
   const ink = { version: 2, pageCount: 1, aspectRatio: ratio, strokes };
   if (points > 50000 || Buffer.byteLength(JSON.stringify(ink)) > 1024 * 1024)
-    invalid('사진 한 장의 필기 저장 한도를 초과했습니다.');
+    invalid('페이지 한 장의 필기 저장 한도를 초과했습니다.');
   return ink;
 }
 @Injectable()
@@ -170,6 +170,7 @@ export class AttendanceService {
     return {
       id: row.id,
       periodId: row.period_id,
+      pageType: row.page_type,
       imageHash: row.image_hash,
       width: row.width,
       height: row.height,
@@ -308,7 +309,49 @@ export class AttendanceService {
   }
   async photo(id: string) {
     const row = this.row('attendance_pages', id);
+    if (row.page_type !== 'photo')
+      throw new NotFoundException('사진이 없는 노트입니다.');
     return readFile(resolve(this.photoRoot, `${row.image_hash}.jpg`));
+  }
+  createNote(id: string, input: any) {
+    idValue(id);
+    const periodId = idValue(input.periodId);
+    return this.sqlite.transaction((db) => {
+      const period = this.row('attendance_periods', periodId);
+      this.requireActiveCenter(period.center_id);
+      if (period.deleted_at)
+        throw new ConflictException(
+          '삭제된 교시입니다. 기록을 복구한 뒤 다시 전송하세요.',
+        );
+      const existing: any = db
+        .prepare('SELECT * FROM attendance_pages WHERE id=?')
+        .get(id);
+      if (existing) {
+        if (existing.page_type !== 'note' || existing.period_id !== periodId)
+          throw new ConflictException(
+            '페이지 식별자가 다른 기록에 사용됐습니다.',
+          );
+        return this.page(existing);
+      }
+      const ink = {
+        version: 2,
+        pageCount: 1,
+        aspectRatio: 1000 / 1414,
+        strokes: [],
+      };
+      db.prepare(
+        `INSERT INTO attendance_pages
+        (id,period_id,page_type,image_hash,width,height,ink_json,position,updated_at)
+        VALUES(?,?,'note',NULL,1000,1414,?,(SELECT COALESCE(MAX(position),-1)+1 FROM attendance_pages WHERE period_id=?),?)`,
+      ).run(
+        id,
+        periodId,
+        JSON.stringify(ink),
+        periodId,
+        new Date().toISOString(),
+      );
+      return this.page(this.row('attendance_pages', id));
+    });
   }
   async upload(
     id: string,
@@ -343,7 +386,11 @@ export class AttendanceService {
         .prepare('SELECT * FROM attendance_pages WHERE id=?')
         .get(id);
       if (existing) {
-        if (existing.image_hash !== hash || existing.period_id !== periodId)
+        if (
+          existing.page_type !== 'photo' ||
+          existing.image_hash !== hash ||
+          existing.period_id !== periodId
+        )
           throw new ConflictException(
             '사진 식별자가 다른 기록에 사용됐습니다.',
           );

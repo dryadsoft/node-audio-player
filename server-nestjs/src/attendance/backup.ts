@@ -26,7 +26,9 @@ export async function backupAttendance(
       throw new Error('백업 DB 무결성 검사 실패');
     hashes = (
       copied
-        .prepare('SELECT DISTINCT image_hash FROM attendance_pages')
+        .prepare(
+          'SELECT DISTINCT image_hash FROM attendance_pages WHERE image_hash IS NOT NULL',
+        )
         .all() as any[]
     ).map((r) => r.image_hash);
   } finally {

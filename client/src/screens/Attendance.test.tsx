@@ -8,10 +8,15 @@ import { AttendanceState } from "../attendance/workspace";
 jest.mock("../attendance/workspace", () => ({ useAttendance: jest.fn() }));
 jest.mock("@dryadsoft/react-ink-canvas", () => ({
   InkCanvas: (p: any) => (
-    <div aria-label="사진 위 필기" data-fixed={p.fixedPage}>
-      <img src={p.backgroundImage} alt="필기 배경" />
+    <div
+      aria-label={p.labels?.canvas || "사진 위 필기"}
+      data-fixed={p.fixedPage}
+      data-mode={p.mode}
+    >
+      {p.backgroundImage && <img src={p.backgroundImage} alt="필기 배경" />}
     </div>
   ),
+  InkNoteBackground: () => <div data-testid="ruled-preview" />,
 }));
 let state: AttendanceState, workspace: any;
 beforeEach(() => {
@@ -19,6 +24,7 @@ beforeEach(() => {
     meta = {
       id: "page",
       periodId: "p1",
+      pageType: "photo" as const,
       imageHash: "h",
       width: 100,
       height: 140,
@@ -116,13 +122,11 @@ beforeEach(() => {
 });
 afterEach(() => jest.restoreAllMocks());
 it("allows adding the same location on another weekday without changing the selected center", async () => {
-  const save = jest
-    .spyOn(attendanceApi, "center")
-    .mockResolvedValue({
-      ...state.catalogs[0].centers[0],
-      id: "new",
-      weekday: 3,
-    });
+  const save = jest.spyOn(attendanceApi, "center").mockResolvedValue({
+    ...state.catalogs[0].centers[0],
+    id: "new",
+    weekday: 3,
+  });
   render(
     <MemoryRouter>
       <Attendance />
@@ -303,7 +307,9 @@ it("blocks center deletion during unsent or unsaved work and offline management"
   const view = render(ui);
   fireEvent.click(await screen.findByText(/센터 · 화/));
   expect(screen.getByRole("button", { name: "센터 삭제" })).toBeDisabled();
-  expect(screen.getByText(/미전송 사진·필기와 기기 저장/)).toBeInTheDocument();
+  expect(
+    screen.getByText(/미전송 페이지·필기와 기기 저장/)
+  ).toBeInTheDocument();
   state.pages[0].dirty = false;
   state.unsaved = 1;
   view.rerender(
@@ -381,9 +387,84 @@ it("renders the image as the fixed ink background rather than a separate notes f
     "src",
     "blob:photo"
   );
-  expect(screen.getByLabelText("사진 위 필기")).toHaveAttribute(
+  expect(screen.getByLabelText("출석부 사진 위 필기")).toHaveAttribute(
     "data-fixed",
     "true"
   );
   expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+});
+
+it("opens a photo-free note immediately and shows its paper in trash without loading a Blob", async () => {
+  const record = state.pages[0];
+  record.local = { ...record.local, pageType: "note", imageHash: null };
+  record.remoteDeleted = false;
+  record.photoReady = false;
+  state.catalogs[0].pages[0] = { ...record.local };
+  const view = render(
+    <MemoryRouter>
+      <Attendance />
+    </MemoryRouter>
+  );
+  expect(await screen.findByLabelText("출석부 줄노트 필기")).toHaveAttribute(
+    "data-mode",
+    "note"
+  );
+  expect(workspace.store.photo).not.toHaveBeenCalled();
+  expect(screen.queryByAltText("필기 배경")).not.toBeInTheDocument();
+  record.remoteDeleted = true;
+  view.rerender(
+    <MemoryRouter>
+      <Attendance />
+    </MemoryRouter>
+  );
+  expect(screen.getByTestId("ruled-preview")).toBeInTheDocument();
+});
+it("adds a note from the empty sheet while offline and selects it", async () => {
+  state.pages = [];
+  state.catalogs[0].pages = [];
+  state.online = false;
+  workspace.addNote = jest.fn(async () => {
+    const local = {
+      id: "new-note",
+      periodId: "p1",
+      pageType: "note" as const,
+      imageHash: null,
+      width: 1000,
+      height: 1414,
+      position: 0,
+      revision: 0,
+      deletedAt: null,
+      updatedAt: "t",
+      inkDocument: {
+        version: 2 as const,
+        pageCount: 1,
+        aspectRatio: 1000 / 1414,
+        strokes: [],
+      },
+    };
+    state.pages = [
+      {
+        id: local.id,
+        semester: state.target!,
+        local,
+        dirty: true,
+        version: 1,
+        conflicts: [],
+        photoReady: false,
+      },
+    ];
+    return local.id;
+  });
+  render(
+    <MemoryRouter>
+      <Attendance />
+    </MemoryRouter>
+  );
+  fireEvent.click(await screen.findByRole("button", { name: "줄노트 추가" }));
+  expect(await screen.findByLabelText("출석부 줄노트 필기")).toHaveAttribute(
+    "data-fixed",
+    "true"
+  );
+  expect(workspace.addNote).toHaveBeenCalledWith(state.target, "p1");
+  expect(workspace.store.photo).not.toHaveBeenCalled();
 });

@@ -8,7 +8,7 @@ import { mkdirSync } from 'fs';
 import { dirname, resolve } from 'path';
 import { loadSqlite, SqliteDatabase } from './sqlite.types';
 
-const MIGRATION_VERSION = 7;
+const MIGRATION_VERSION = 8;
 
 @Injectable()
 export class SqliteService implements OnModuleInit, OnModuleDestroy {
@@ -318,6 +318,25 @@ export class SqliteService implements OnModuleInit, OnModuleDestroy {
             CREATE INDEX attendance_period_center ON attendance_periods(center_id);
             CREATE INDEX attendance_page_period ON attendance_pages(period_id);
           `);
+        }
+        if (version === 8) {
+          database.exec(`
+            CREATE TABLE attendance_pages_new (
+              id TEXT PRIMARY KEY, period_id TEXT NOT NULL REFERENCES attendance_periods(id),
+              image_hash TEXT, width INTEGER NOT NULL, height INTEGER NOT NULL,
+              ink_json TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 0,
+              revision INTEGER NOT NULL DEFAULT 1, deleted_at TEXT, updated_at TEXT NOT NULL,
+              page_type TEXT NOT NULL DEFAULT 'photo' CHECK(page_type IN ('photo','note')),
+              CHECK((page_type='photo' AND image_hash IS NOT NULL) OR (page_type='note' AND image_hash IS NULL))
+            );
+            INSERT INTO attendance_pages_new
+              SELECT id,period_id,image_hash,width,height,ink_json,position,revision,deleted_at,updated_at,'photo' FROM attendance_pages;
+            DROP TABLE attendance_pages;
+            ALTER TABLE attendance_pages_new RENAME TO attendance_pages;
+            CREATE INDEX attendance_page_period ON attendance_pages(period_id);
+          `);
+          if (database.prepare('PRAGMA foreign_key_check').all().length)
+            throw new Error('출석부 마이그레이션의 참조 검증에 실패했습니다.');
         }
         database
           .prepare(

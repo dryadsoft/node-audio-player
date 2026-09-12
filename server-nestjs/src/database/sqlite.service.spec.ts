@@ -76,7 +76,7 @@ describe('SqliteService migrations', () => {
           before.periods,
         );
         expect(db.prepare('SELECT * FROM attendance_pages').all()).toEqual(
-          before.pages,
+          before.pages.map((p: any) => ({ ...p, page_type: 'photo' })),
         );
         expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
         expect(db.prepare('PRAGMA foreign_keys').get()).toEqual({
@@ -86,7 +86,7 @@ describe('SqliteService migrations', () => {
           db
             .prepare('SELECT MAX(version) AS version FROM schema_migrations')
             .get(),
-        ).toEqual({ version: 7 });
+        ).toEqual({ version: 8 });
         expect(sqlite.integrityCheck()).toBe(true);
         db.prepare(
           "INSERT INTO attendance_centers VALUES('other',2026,'fall','loc',3,1,NULL)",
@@ -124,6 +124,45 @@ describe('SqliteService migrations', () => {
       expect(sqlite.database.prepare('PRAGMA foreign_keys').get()).toEqual({
         foreign_keys: 1,
       });
+    } finally {
+      sqlite.onModuleDestroy();
+    }
+  });
+
+  it('rolls back v8 page replacement on an invalid reference without changing v7 data', () => {
+    const before = legacyAttendance();
+    const { DatabaseSync } = loadSqlite();
+    const legacy = new DatabaseSync(databasePath);
+    legacy.exec(`PRAGMA foreign_keys=OFF;
+      ALTER TABLE attendance_centers ADD COLUMN deleted_at TEXT;
+      UPDATE schema_migrations SET version=7;
+      UPDATE attendance_pages SET period_id='missing-period';`);
+    const pages = legacy.prepare('SELECT * FROM attendance_pages').all();
+    legacy.close();
+    const sqlite = new SqliteService();
+    try {
+      expect(() => sqlite.onModuleInit()).toThrow();
+      expect(
+        sqlite.database.prepare('SELECT * FROM attendance_pages').all(),
+      ).toEqual(pages);
+      expect(
+        sqlite.database.prepare('SELECT * FROM attendance_periods').all(),
+      ).toEqual(before.periods);
+      expect(
+        sqlite.database
+          .prepare('SELECT MAX(version) AS version FROM schema_migrations')
+          .get(),
+      ).toEqual({ version: 7 });
+      expect(sqlite.database.prepare('PRAGMA foreign_keys').get()).toEqual({
+        foreign_keys: 1,
+      });
+      expect(
+        sqlite.database
+          .prepare(
+            "SELECT name FROM sqlite_master WHERE name='attendance_pages_new'",
+          )
+          .all(),
+      ).toEqual([]);
     } finally {
       sqlite.onModuleDestroy();
     }
@@ -205,7 +244,7 @@ describe('SqliteService migrations', () => {
         sqlite.database
           .prepare('SELECT MAX(version) AS version FROM schema_migrations')
           .get(),
-      ).toEqual({ version: 7 });
+      ).toEqual({ version: 8 });
       expect(
         sqlite.database
           .prepare(

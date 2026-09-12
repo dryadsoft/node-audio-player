@@ -5,6 +5,9 @@ import { attendanceApi, AttendanceError } from "./api";
 import { AttendanceStore } from "./store";
 import {
   Catalog,
+  NOTE_WIDTH,
+  NOTE_HEIGHT,
+  pageReady,
   Page,
   RecordPage,
   SavedCatalog,
@@ -172,10 +175,13 @@ export class AttendanceWorkspace {
       this.storageFailure(e);
     }
   }
+  addNote(t: Term, periodId: string) {
+    return this.add(t, periodId, undefined, NOTE_WIDTH, NOTE_HEIGHT);
+  }
   async add(
     t: Term,
     periodId: string,
-    blob: Blob,
+    blob: Blob | undefined,
     width: number,
     height: number
   ) {
@@ -190,7 +196,8 @@ export class AttendanceWorkspace {
     const local: Page = {
       id,
       periodId,
-      imageHash: "",
+      pageType: blob ? "photo" : "note",
+      imageHash: blob ? "" : null,
       width,
       height,
       position: Date.now(),
@@ -214,7 +221,7 @@ export class AttendanceWorkspace {
           dirty: true,
           version: 1,
           conflicts: [],
-          photoReady: true,
+          photoReady: !!blob,
         }),
         blob
       );
@@ -366,9 +373,28 @@ export class AttendanceWorkspace {
     blob?: Blob,
     periodDeleted = false
   ) {
-    const wasDeleted = this.state.pages.find(
-      (p) => p.id === remote.id
-    )?.remoteDeleted;
+    const existing = this.state.pages.find((p) => p.id === remote.id);
+    if (
+      existing &&
+      (existing.local.periodId !== remote.periodId ||
+        existing.local.pageType !== remote.pageType)
+    ) {
+      const message =
+        "페이지 식별자가 다른 기록에 사용됐습니다. 기기 기록은 유지됩니다.";
+      const saved = await this.store.mutate(
+        remote.id,
+        (current) =>
+          current && {
+            ...current,
+            error: message,
+            version: current.version + 1,
+          }
+      );
+      this.blocked.add(remote.id);
+      this.accept(saved);
+      throw new AttendanceError(message, 409);
+    }
+    const wasDeleted = existing?.remoteDeleted;
     const result = await this.store
       .mutate(
         remote.id,
@@ -451,13 +477,14 @@ export class AttendanceWorkspace {
         return;
       try {
         if (!r.base) {
-          const blob = await this.store.photo(id);
-          if (!blob) throw new Error("기기 사진이 없습니다.");
-          const created = await attendanceApi.upload(
-            id,
-            r.local.periodId,
-            blob
-          );
+          let created: Page;
+          if (r.local.pageType === "note") {
+            created = await attendanceApi.createNote(id, r.local.periodId);
+          } else {
+            const blob = await this.store.photo(id);
+            if (!blob) throw new Error("기기 사진이 없습니다.");
+            created = await attendanceApi.upload(id, r.local.periodId, blob);
+          }
           await this.receive(created, r.semester);
           r = this.state.pages.find((p) => p.id === id)!;
           if (!r.dirty) return;
@@ -594,14 +621,15 @@ export class AttendanceWorkspace {
               if (
                 !old ||
                 old.base?.revision !== meta.revision ||
-                !old.photoReady ||
+                !pageReady(old) ||
                 old.remoteDeleted !== !!(meta.deletedAt || parentDeleted)
               ) {
                 try {
                   const page = await attendanceApi.page(meta.id),
-                    blob = old?.photoReady
-                      ? undefined
-                      : await attendanceApi.photo(meta.id);
+                    blob =
+                      page.pageType === "note" || old?.photoReady
+                        ? undefined
+                        : await attendanceApi.photo(meta.id);
                   await this.receive(page, t, blob, parentDeleted);
                 } catch (error) {
                   cycleErrors.push(error);
