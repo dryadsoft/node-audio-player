@@ -3,20 +3,18 @@ import { usePwaUpdateGuard } from "../offline/updateGuard";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { InkCanvas, InkNoteBackground } from "@dryadsoft/react-ink-canvas";
 import { Link } from "react-router-dom";
-import { attendanceApi, AttendanceError } from "../attendance/api";
-import { useDialogFocus } from "../attendance/useDialogFocus";
+import AttendanceManager from "../attendance/AttendanceManager";
+import AttendanceSelector from "../attendance/AttendanceSelector";
 import { useAttendance } from "../attendance/workspace";
 import {
   PageMeta,
   pageReady,
-  Period,
   Term,
   termKey,
   terms,
   isPeriodDeleted,
 } from "../attendance/types";
 import PhotoImport from "../attendance/PhotoImport";
-import { LessonTerm } from "../types";
 import { pwaState, subscribePwa } from "../offline/pwa";
 import "../attendance/attendance.css";
 const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
@@ -35,18 +33,19 @@ export default function Attendance() {
     [details, setDetails] = useState(false),
     [fullscreen, setFullscreen] = useState(false),
     [touchDraw, setTouchDraw] = useState(false),
-    [trash, setTrash] = useState(false),
+    [managing, setManaging] = useState(false),
+    [recovery, setRecovery] = useState(false),
     [file, setFile] = useState<File>(),
     [error, setError] = useState(""),
     [working, setWorking] = useState(false),
     [photo, setPhoto] = useState("");
-  const [locationId, setLocationId] = useState(""),
-    [weekday, setWeekday] = useState(1),
-    [periodName, setPeriodName] = useState(""),
-    [pwa, setPwa] = useState(pwaState);
+  const [pwa, setPwa] = useState(pwaState);
   const [interacting, setInteracting] = useState(false);
-  usePwaUpdateGuard(interacting || file || working || panel
-    ? "필기·사진 가져오기·관리 입력을 마치거나 닫은 뒤 적용해 주세요." : "");
+  usePwaUpdateGuard(
+    interacting || file || working || panel || managing
+      ? "필기·사진 가져오기·관리 입력을 마치거나 닫은 뒤 적용해 주세요."
+      : ""
+  );
   const chosenInitial = useRef(false),
     camera = useRef<HTMLInputElement>(null),
     picker = useRef<HTMLInputElement>(null);
@@ -61,30 +60,33 @@ export default function Attendance() {
   useEffect(() => {
     workspace.setView(view);
   }, [workspace, view]);
-  useDialogFocus(panel);
-  const [yearInput, setYearInput] = useState(String(view.year));
-  useEffect(() => setYearInput(String(view.year)), [view.year]);
   const catalog = state.catalogs.find(
     (c) => termKey(c.semester) === termKey(view)
   );
   const centers = useMemo(
-      () => catalog?.centers.filter((c) => trash || !c.deletedAt) || [],
-      [catalog, trash]
+      () => catalog?.centers.filter((c) => !c.deletedAt) || [],
+      [catalog]
     ),
     center = centers.find((c) => c.id === centerId);
   const periods = useMemo(
     () =>
       catalog?.periods
-        .filter((p) => p.centerId === centerId && (trash || !p.deletedAt))
+        .filter((p) => p.centerId === centerId && !p.deletedAt)
         .sort((a, b) => a.position - b.position || a.id.localeCompare(b.id)) ||
       [],
-    [catalog, centerId, trash]
+    [catalog, centerId]
   );
   const period = periods.find((p) => p.id === periodId);
   useEffect(() => {
     if (!centers.some((c) => c.id === centerId))
-      setCenterId(centers[0]?.id || "");
-  }, [centers, centerId]);
+      setCenterId(
+        centers.find(
+          (c) =>
+            catalog?.locations.find((l) => l.id === c.locationId)?.active !==
+            false
+        )?.id || ""
+      );
+  }, [centers, centerId, catalog]);
   useEffect(() => {
     if (!periods.some((p) => p.id === periodId))
       setPeriodId(periods[0]?.id || "");
@@ -104,9 +106,9 @@ export default function Attendance() {
         );
       });
     return Array.from(map.values())
-      .filter((p) => trash || !p.deletedAt)
+      .filter((p) => !p.deletedAt)
       .sort((a, b) => a.position - b.position || a.id.localeCompare(b.id));
-  }, [catalog, periodId, state.pages, trash]);
+  }, [catalog, periodId, state.pages]);
   useEffect(() => {
     if (!pages.some((p) => p.id === pageId)) setPageId(pages[0]?.id || "");
   }, [pages, pageId]);
@@ -169,37 +171,6 @@ export default function Attendance() {
     downloaded === targetPages.length &&
     ["ready", "update"].includes(pwa);
   const pending = state.pages.filter((p) => p.dirty).length;
-  const duplicateCenter = catalog?.centers.find(
-    (c) => c.locationId === locationId && c.weekday === weekday
-  );
-  const centerHasPending =
-    !!state.unsaved ||
-    state.pages.some(
-      (p) =>
-        p.dirty &&
-        catalog?.periods.some(
-          (period) =>
-            period.id === p.local.periodId && period.centerId === centerId
-        )
-    );
-  const run = async (action: () => Promise<unknown>) => {
-    if (!state.online) {
-      setError("이 관리는 온라인에서 사용할 수 있습니다.");
-      return;
-    }
-    setWorking(true);
-    setError("");
-    try {
-      await action();
-      await workspace.refresh();
-    } catch (e) {
-      if (e instanceof AttendanceError && e.status === 409)
-        await workspace.refresh().catch(() => undefined);
-      setError(e instanceof Error ? e.message : "요청에 실패했습니다.");
-    } finally {
-      setWorking(false);
-    }
-  };
   const addNote = async () => {
     if (working || !period || isPeriodDeleted(catalog, periodId)) return;
     setWorking(true);
@@ -219,21 +190,6 @@ export default function Attendance() {
     e.target.value = "";
     setAddMenu(false);
     if (next) setFile(next);
-  };
-  const reorder = async <
-    T extends { id: string; position: number; revision: number }
-  >(
-    list: T[],
-    index: number,
-    delta: number,
-    save: (item: T, position: number) => Promise<unknown>
-  ) => {
-    const other = index + delta;
-    if (other < 0 || other >= list.length) return;
-    const copy = [...list];
-    [copy[index], copy[other]] = [copy[other], copy[index]];
-    for (let i = 0; i < copy.length; i++)
-      if (copy[i].position !== i) await save(copy[i], i);
   };
   const centerName =
     catalog?.locations.find((l) => l.id === center?.locationId)?.name ||
@@ -392,8 +348,8 @@ export default function Attendance() {
           {record.error}
           <button
             onClick={() => {
-              setTrash(true);
-              setPanel(true);
+              setRecovery(true);
+              setManaging(true);
             }}
           >
             관리·복구
@@ -404,7 +360,7 @@ export default function Attendance() {
         {!period ? (
           <div className="attendance-empty">
             <strong>센터와 교시를 준비하세요</strong>
-            <button className="primary" onClick={() => setPanel(true)}>
+            <button className="primary" onClick={() => setManaging(true)}>
               출석부 관리
             </button>
           </div>
@@ -541,395 +497,38 @@ export default function Attendance() {
         )}
       </section>
       {panel && (
-        <div className="attendance-overlay" onClick={() => setPanel(false)}>
-          <aside
-            className="attendance-manager"
-            role="dialog"
-            aria-modal="true"
-            aria-label="출석부 관리"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <header>
-              <strong>출석부 관리</strong>
-              <button onClick={() => setPanel(false)}>닫기</button>
-            </header>
-            <section>
-              <h2>학기</h2>
-              <div className="attendance-fields">
-                <label>
-                  연도
-                  <input
-                    type="number"
-                    min="2000"
-                    max="9999"
-                    value={yearInput}
-                    onChange={(e) => {
-                      setYearInput(e.target.value);
-                      const year = Number(e.target.value);
-                      if (
-                        /^\d{4}$/.test(e.target.value) &&
-                        year >= 2000 &&
-                        year <= 9999
-                      )
-                        setView({ ...view, year });
-                    }}
-                  />
-                </label>
-                <label>
-                  학기
-                  <select
-                    value={view.term}
-                    onChange={(e) =>
-                      setView({ ...view, term: e.target.value as LessonTerm })
-                    }
-                  >
-                    {Object.entries(terms).map(([v, label]) => (
-                      <option key={v} value={v}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <button
-                className="primary"
-                onClick={() => void workspace.setTarget(view)}
-              >
-                {state.target && termKey(state.target) === termKey(view)
-                  ? "이 학기 전체를 기기에 저장 중"
-                  : "이 학기를 오프라인 저장 대상으로 지정"}
-              </button>
-            </section>
-            <section>
-              <h2>센터</h2>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={trash}
-                  onChange={(e) => setTrash(e.target.checked)}
-                />{" "}
-                휴지통 포함
-              </label>
-              <select
-                aria-label="센터 선택"
-                value={centerId}
-                onChange={(e) => setCenterId(e.target.value)}
-              >
-                <option value="">센터 선택</option>
-                {centers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.deletedAt ? "휴지통 · " : ""}
-                    {catalog?.locations.find((l) => l.id === c.locationId)
-                      ?.name || c.locationId}{" "}
-                    · {weekdays[c.weekday]}
-                  </option>
-                ))}
-              </select>
-              {center && (
-                <label>
-                  수업 요일
-                  <select
-                    disabled={!state.online || working || !!center.deletedAt}
-                    value={center.weekday}
-                    onChange={(e) => {
-                      const day = Number(e.target.value);
-                      void run(() =>
-                        attendanceApi.center({
-                          ...center,
-                          weekday: day,
-                          expectedRevision: center.revision,
-                        })
-                      );
-                    }}
-                  >
-                    {weekdays.map((d, i) => (
-                      <option key={d} value={i}>
-                        {d}요일
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              {center && (
-                <>
-                  <button
-                    disabled={
-                      !state.online ||
-                      working ||
-                      (!center.deletedAt && centerHasPending)
-                    }
-                    onClick={() => {
-                      const deleting = !center.deletedAt;
-                      if (
-                        deleting &&
-                        !window.confirm(
-                          `${centerName} · ${
-                            weekdays[center.weekday]
-                          }요일 등록을 휴지통으로 옮길까요? 교시·사진·노트·필기는 보관되며 복구할 수 있습니다.`
-                        )
-                      )
-                        return;
-                      void run(async () => {
-                        await attendanceApi.center({
-                          ...center,
-                          deleted: deleting,
-                          expectedRevision: center.revision,
-                        });
-                        await workspace.refresh();
-                        if (deleting) {
-                          setTrash(false);
-                          setCenterId(
-                            centers.find(
-                              (c) => c.id !== center.id && !c.deletedAt
-                            )?.id || ""
-                          );
-                        }
-                      });
-                    }}
-                  >
-                    {center.deletedAt ? "센터 복구" : "센터 삭제"}
-                  </button>
-                  {!center.deletedAt && centerHasPending && (
-                    <p>
-                      미전송 페이지·필기와 기기 저장이 완료되면 센터를 삭제할 수
-                      있습니다.
-                    </p>
-                  )}
-                  {!!center.deletedAt && (
-                    <p>
-                      센터를 먼저 복구하면 교시·페이지를 다시 사용할 수
-                      있습니다.
-                    </p>
-                  )}
-                </>
-              )}
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (duplicateCenter) return;
-                  void run(async () => {
-                    const c = await attendanceApi.center({
-                      ...view,
-                      locationId,
-                      weekday,
-                    });
-                    await workspace.refresh();
-                    setCenterId(c.id);
-                  });
-                }}
-              >
-                <label>
-                  이 학기에 센터 추가
-                  <select
-                    required
-                    value={locationId}
-                    disabled={!state.online || working}
-                    onChange={(e) => setLocationId(e.target.value)}
-                  >
-                    <option value="">기존 센터 선택</option>
-                    {catalog?.locations
-                      .filter((l) => l.active)
-                      .map((l) => (
-                        <option key={l.id} value={l.id}>
-                          {l.name}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-                <label>
-                  요일
-                  <select
-                    disabled={!state.online || working}
-                    value={weekday}
-                    onChange={(e) => setWeekday(Number(e.target.value))}
-                  >
-                    {weekdays.map((d, i) => (
-                      <option key={d} value={i}>
-                        {d}요일
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {duplicateCenter && (
-                  <p role="status">
-                    {duplicateCenter.deletedAt
-                      ? "휴지통에 같은 센터·요일이 있습니다. 휴지통 포함을 켜고 센터를 복구하세요."
-                      : "이미 등록된 센터·요일입니다. 다른 요일을 선택하세요."}
-                  </p>
-                )}
-                <button
-                  disabled={
-                    !state.online || !locationId || working || !!duplicateCenter
-                  }
-                >
-                  센터 추가
-                </button>
-              </form>
-            </section>
-            <section>
-              <h2>교시</h2>
-              {periods.map((p, i) => (
-                <div
-                  className="attendance-manage-row"
-                  key={`${p.id}:${p.revision}`}
-                >
-                  <button
-                    className={p.id === periodId ? "selected" : ""}
-                    onClick={() => setPeriodId(p.id)}
-                  >
-                    {p.deletedAt ? "휴지통 · " : ""}
-                    {p.name}
-                  </button>
-                  <input
-                    aria-label={`${p.name} 이름`}
-                    defaultValue={p.name}
-                    maxLength={100}
-                    disabled={!state.online || working || !!center?.deletedAt}
-                    onBlur={(e) => {
-                      if (e.target.value.trim() && e.target.value !== p.name)
-                        void run(() =>
-                          attendanceApi.period(p.id, {
-                            name: e.target.value,
-                            expectedRevision: p.revision,
-                          })
-                        );
-                    }}
-                  />
-                  <button
-                    aria-label={`${p.name} 위로`}
-                    disabled={
-                      i === 0 || !state.online || working || !!center?.deletedAt
-                    }
-                    onClick={() =>
-                      void run(() =>
-                        reorder<Period>(periods, i, -1, (item, position) =>
-                          attendanceApi.period(item.id, {
-                            position,
-                            expectedRevision: item.revision,
-                          })
-                        )
-                      )
-                    }
-                  >
-                    ↑
-                  </button>
-                  <button
-                    disabled={!state.online || working || !!center?.deletedAt}
-                    onClick={() =>
-                      void run(() =>
-                        attendanceApi.period(p.id, {
-                          deleted: !p.deletedAt,
-                          expectedRevision: p.revision,
-                        })
-                      )
-                    }
-                  >
-                    {p.deletedAt ? "복구" : "휴지통"}
-                  </button>
-                </div>
-              ))}
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void run(async () => {
-                    const p = await attendanceApi.createPeriod(
-                      centerId,
-                      periodName
-                    );
-                    await workspace.refresh();
-                    setPeriodId(p.id);
-                    setPeriodName("");
-                  });
-                }}
-              >
-                <input
-                  aria-label="새 교시 이름"
-                  placeholder="예: 1교시, 유아반"
-                  maxLength={100}
-                  required
-                  value={periodName}
-                  onChange={(e) => setPeriodName(e.target.value)}
-                />
-                <button
-                  disabled={
-                    !center ||
-                    !!center.deletedAt ||
-                    !state.online ||
-                    working ||
-                    !periodName.trim()
-                  }
-                >
-                  교시 추가
-                </button>
-              </form>
-            </section>
-            <section>
-              <h2>페이지 · {period?.name || "교시를 선택하세요"}</h2>
-              {pages.map((p, i) => (
-                <div className="attendance-manage-row" key={p.id}>
-                  <button
-                    className={pageId === p.id ? "selected" : ""}
-                    onClick={() => {
-                      setPageId(p.id);
-                      setPanel(false);
-                    }}
-                  >
-                    {p.deletedAt ? "휴지통 · " : ""}
-                    {i + 1}페이지 · {p.pageType === "note" ? "줄노트" : "사진"}
-                  </button>
-                  <button
-                    aria-label={`${i + 1}페이지 위로`}
-                    disabled={
-                      !state.online ||
-                      working ||
-                      isPeriodDeleted(catalog, periodId) ||
-                      i === 0 ||
-                      !p.revision
-                    }
-                    onClick={() =>
-                      void run(() =>
-                        reorder(pages, i, -1, (item, position) =>
-                          attendanceApi.changePage(item.id, {
-                            position,
-                            expectedRevision: item.revision,
-                          })
-                        )
-                      )
-                    }
-                  >
-                    ↑
-                  </button>
-                  <button
-                    disabled={
-                      !state.online ||
-                      working ||
-                      isPeriodDeleted(catalog, periodId) ||
-                      !p.revision ||
-                      (!p.deletedAt &&
-                        state.pages.some((r) => r.id === p.id && r.dirty))
-                    }
-                    onClick={() =>
-                      void run(() =>
-                        attendanceApi.changePage(p.id, {
-                          deleted: !p.deletedAt,
-                          expectedRevision: p.revision,
-                        })
-                      )
-                    }
-                  >
-                    {p.deletedAt ? "복구" : "휴지통"}
-                  </button>
-                </div>
-              ))}
-            </section>
-            {!state.online && (
-              <p>
-                센터·교시 관리와 휴지통 복구는 온라인에서 사용할 수 있습니다.
-              </p>
-            )}
-            {error && <p role="alert">{error}</p>}
-          </aside>
-        </div>
+        <AttendanceSelector
+          view={view}
+          onView={setView}
+          centerId={centerId}
+          periodId={periodId}
+          pageId={pageId}
+          onClose={() => setPanel(false)}
+          onManage={() => {
+            setPanel(false);
+            setManaging(true);
+          }}
+          onSelect={(center, period, page) => {
+            setCenterId(center);
+            setPeriodId(period);
+            setPageId(page);
+            setPanel(false);
+          }}
+        />
+      )}
+      {managing && (
+        <AttendanceManager
+          view={view}
+          initialCenterId={centerId}
+          initialPeriodId={periodId}
+          initialPageId={pageId}
+          recovery={recovery}
+          onClose={() => {
+            setManaging(false);
+            setRecovery(false);
+            setPanel(true);
+          }}
+        />
       )}
       {file && period && !isPeriodDeleted(catalog, periodId) && (
         <PhotoImport

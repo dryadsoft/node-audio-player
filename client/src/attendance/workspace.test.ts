@@ -607,3 +607,26 @@ it.each(["local", "server"] as const)("resolves an offline erased family to %s a
   expect(again.getSnapshot().pages.find(p => p.id === "one")!.local.inkDocument.strokes).toEqual(expected);
   expect(f.remote.get("one")!.inkDocument.strokes).toEqual(expected);
 });
+
+it("persists shared center status across cached semesters without changing dirty ink or photos", async () => {
+  const f = fixture();
+  await f.ws.setTarget(term);
+  await f.ws.refresh();
+  const existing = (await f.store.hydrate()).catalogs[0];
+  const other = {...existing, semester: {year: 2025, term: "spring" as const}};
+  await f.store.catalog("2025:spring", other);
+  await f.store.mutate("one", old => old && ({...old, dirty: true, version: old.version + 1, local: {...old.local, inkDocument: ink(stroke("pending"))}}));
+  const before = await f.store.hydrate(), photo = await f.store.photo("one");
+  const stopped = [{id: "loc", name: "센터", active: false, createdAt: "t", updatedAt: "new"}];
+  await f.ws.updateLocations(stopped);
+  const restarted = new AttendanceWorkspace(f.store);
+  await restarted.hydrate();
+  const after = await f.store.hydrate();
+  expect(after.catalogs).toHaveLength(2);
+  expect(after.catalogs.every(c => c.locations[0].active === false)).toBe(true);
+  expect(after.pages).toEqual(before.pages);
+  expect(await f.store.photo("one")).toEqual(photo);
+  await restarted.updateLocations([{...stopped[0], active: true}]);
+  expect((await f.store.hydrate()).catalogs.every(c => c.locations[0].active)).toBe(true);
+  expect((await f.store.hydrate()).pages).toEqual(before.pages);
+});

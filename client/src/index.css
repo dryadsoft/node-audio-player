@@ -2534,3 +2534,44 @@ textarea {
 }
 .pwa-update-notice [role="alert"], .pwa-update-notice details { flex-basis: 100%; }
 .pwa-update-notice details { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+
+/* Shared management surfaces keep the underlying document mounted. */
+.management-overlay { position: fixed; inset: 0; z-index: 1500; background: #10221d66; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.management-dialog { width: min(760px, 100%); max-height: calc(100dvh - 40px); display: flex; flex-direction: column; background: var(--panel, #faf9f5); color: var(--ink, #17201f); border: 1px solid var(--line, #c4c9c1); border-radius: 14px; box-shadow: 0 18px 60px #0003; overflow: hidden; }
+.management-wide { width: min(1180px, 100%); }
+.management-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 20px; border-bottom: 1px solid var(--line, #c4c9c1); flex-shrink: 0; }
+.management-heading h2 { margin: 0; font-size: 18px; }
+.management-body { overflow: auto; min-height: 0; padding: 20px; }
+.management-dialog button { font: inherit; cursor: pointer; min-height: 40px; }
+.management-dialog button:disabled { cursor: default; opacity: .5; }
+.management-heading > button, .management-tabs button, .management-actions > button { border: 1px solid var(--line, #c4c9c1); border-radius: 7px; padding: 8px 12px; background: var(--canvas, #eeeae1); color: inherit; }
+.management-tabs, .management-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.management-tabs button[aria-pressed="true"] { background: #234f45; color: #fff; }
+.management-dialog [hidden] { display: none !important; }
+.management-dialog .curriculum-create { margin: 0; }
+.management-dialog .plan-editor { padding: 0; }
+.management-dialog .sheet-actions { position: sticky; bottom: -20px; background: var(--panel, #faf9f5); padding: 14px 0; z-index: 1; }
+.management-drawer-overlay { justify-content: flex-end; padding: 0; }
+.management-drawer { width: min(420px, 100%); height: 100dvh; max-height: 100dvh; border-radius: 0; }
+.management-dialog .attendance-manager { width: 100%; height: auto; padding: 0; box-shadow: none; overflow: visible; }
+.management-dialog :is(input,select,textarea) { font: inherit; }
+.management-dialog :focus-visible { outline: 3px solid #bc8848; outline-offset: 2px; }
+@media (max-width: 600px) {
+  .management-overlay { padding: 0; }
+  .management-dialog { width: 100%; height: 100dvh; max-height: 100dvh; border-radius: 0; }
+  .management-body { padding: 12px; }
+  .management-heading { padding: 12px; }
+  .management-dialog .sheet-actions { bottom: -12px; }
+}
+.management-dialog .location-dialog { width: 100%; }
+.management-dialog :is(input:not([type="checkbox"]), select, textarea) { max-width: 100%; min-width: 0; border: 1px solid var(--line, #c4c9c1); border-radius: 6px; padding: 8px; background: var(--canvas, #fff); color: inherit; }
+.management-dialog .location-create-form input { width: 100%; }
+.management-dialog .curriculum-action-source { display: grid; gap: 8px; }
+.management-dialog .location-row { flex-wrap: wrap; }
+.management-body { overflow-x: hidden; }
+.management-wide .editor-meta { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.management-dialog .sheet-actions { margin-inline: 0; }
+.management-dialog .week-copy-dialog { width: 100%; }
+.management-dialog .attendance-manager > button { border: 1px solid var(--line, #c4c9c1); border-radius: 7px; padding: 8px 12px; background: var(--canvas, #eeeae1); color: inherit; margin-bottom: 12px; }
+@media (max-width: 900px) { .management-wide .editor-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .management-wide .editor-meta { grid-template-columns: minmax(0, 1fr); } }

@@ -1,3 +1,4 @@
+import { LessonLocation } from "../types";
 import { RecordPage, SavedCatalog, Term, normalizePage } from "./types";
 const result = <T>(r: IDBRequest<T>) =>
   new Promise<T>((resolve, reject) => {
@@ -111,6 +112,17 @@ export class AttendanceStore {
       tx = db.transaction("catalogs", "readwrite"),
       complete = done(tx);
     tx.objectStore("catalogs").put(value, key);
+    await complete;
+  }
+  async locations(locations: LessonLocation[]) {
+    const db = await this.db(), tx = db.transaction("catalogs", "readwrite"), complete = done(tx);
+    const store = tx.objectStore("catalogs"), request = store.openCursor();
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return;
+      cursor.update({ ...cursor.value, locations });
+      cursor.continue();
+    };
     await complete;
   }
   async syncedAt(value: string) {

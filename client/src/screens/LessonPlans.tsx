@@ -1,23 +1,20 @@
 import { usePwaUpdateGuard } from "../offline/updateGuard";
 import RequestFailure from "../components/RequestFailure";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   FiBookOpen,
   FiCheck,
   FiClipboard,
-  FiCopy,
   FiDownload,
-  FiEdit2,
   FiMapPin,
-  FiPlus,
   FiSave,
-  FiSettings,
   FiX,
 } from "react-icons/fi";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { api } from "../api";
 import AppNavigation from "../components/AppNavigation";
-import LessonLocationDialog from "../components/LessonLocationDialog";
+import ManagementDialog from "../components/ManagementDialog";
+import CenterManager from "../components/CenterManager";
 import {
   LessonLocation,
   LessonCurriculumSummary,
@@ -43,7 +40,7 @@ const TERM_LABELS = TERMS.reduce<Record<LessonTerm, string>>(
     summer: "여름학기",
     fall: "가을학기",
     winter: "겨울학기",
-  },
+  }
 );
 
 const createEmptyWeeks = (): LessonWeek[] =>
@@ -99,50 +96,65 @@ function LessonPlans() {
   const [programName, setProgramName] = useState("");
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [editor, setEditor] = useState<EditorDraft>();
+  const [managing, setManaging] = useState(false),
+    [centersBusy, setCentersBusy] = useState(false);
+  const initialEditor = useRef("");
+  const beginEditor = (draft: EditorDraft) => {
+    initialEditor.current = JSON.stringify(draft);
+    setEditor(draft);
+  };
   const [locationDialogOpen, setLocationDialogOpen] = useState(false);
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [copySourceId, setCopySourceId] = useState("");
   const [weekMappings, setWeekMappings] = useState<WeekMapping[]>([]);
   const [notice, setNotice] = useState<Notice>();
-  usePwaUpdateGuard(editor || locationDialogOpen || copyDialogOpen ? "계획서 입력을 저장하거나 편집 창을 닫은 뒤 적용해 주세요." : "");
+  usePwaUpdateGuard(
+    managing || editor || locationDialogOpen || copyDialogOpen
+      ? "계획서 입력을 저장하거나 편집 창을 닫은 뒤 적용해 주세요."
+      : ""
+  );
 
   const locationsQuery = useQuery<LessonLocation[]>(
     "lessonLocations",
-    api.lessonLocations,
+    api.lessonLocations
   );
   const plansQuery = useQuery<LessonPlanSummary[]>("lessonPlans", () =>
-    api.lessonPlans(),
+    api.lessonPlans()
   );
   const curriculaQuery = useQuery<LessonCurriculumSummary[]>(
     "lessonCurricula",
-    () => api.lessonCurricula(),
+    () => api.lessonCurricula()
   );
   const locations = useMemo(
     () => locationsQuery.data || [],
-    [locationsQuery.data],
+    [locationsQuery.data]
   );
   const plans = useMemo(() => plansQuery.data || [], [plansQuery.data]);
   const curricula = useMemo(
     () => curriculaQuery.data || [],
-    [curriculaQuery.data],
+    [curriculaQuery.data]
   );
   const activeLocations = useMemo(
     () => locations.filter((location) => location.active),
-    [locations],
+    [locations]
   );
+  useEffect(() => {
+    if (locationId && locations.some((l) => l.id === locationId && !l.active))
+      setLocationId("");
+  }, [locations, locationId]);
   const programNames = useMemo(
     () =>
       Array.from(new Set(plans.map((plan) => plan.programName))).sort((a, b) =>
-        a.localeCompare(b, "ko"),
+        a.localeCompare(b, "ko")
       ),
-    [plans],
+    [plans]
   );
   const years = useMemo(
     () =>
       Array.from(
-        new Set([currentYear, ...plans.map((plan) => plan.year)]),
+        new Set([currentYear, ...plans.map((plan) => plan.year)])
       ).sort((left, right) => right - left),
-    [currentYear, plans],
+    [currentYear, plans]
   );
   const filteredPlans = useMemo(
     () =>
@@ -151,9 +163,9 @@ function LessonPlans() {
           plan.year === year &&
           (!term || plan.term === term) &&
           (!locationId || plan.locationId === locationId) &&
-          (!programName || plan.programName === programName),
+          (!programName || plan.programName === programName)
       ),
-    [locationId, plans, programName, term, year],
+    [locationId, plans, programName, term, year]
   );
 
   useEffect(() => {
@@ -168,9 +180,9 @@ function LessonPlans() {
     const timeout = window.setTimeout(
       () =>
         setNotice((current) =>
-          current?.id === notice.id ? undefined : current,
+          current?.id === notice.id ? undefined : current
         ),
-      notice.type === "success" ? 3000 : 5000,
+      notice.type === "success" ? 3000 : 5000
     );
     return () => window.clearTimeout(timeout);
   }, [notice]);
@@ -178,12 +190,12 @@ function LessonPlans() {
   const detailQuery = useQuery<LessonPlan>(
     ["lessonPlan", selectedPlanId],
     () => api.lessonPlan(selectedPlanId),
-    { enabled: Boolean(selectedPlanId) && !editor },
+    { enabled: Boolean(selectedPlanId) }
   );
   const copySourceQuery = useQuery<LessonPlan>(
     ["lessonPlan", copySourceId],
     () => api.lessonPlan(copySourceId),
-    { enabled: copyDialogOpen && Boolean(copySourceId) },
+    { enabled: copyDialogOpen && Boolean(copySourceId) }
   );
 
   const showNotice = (message: string, type: Notice["type"] = "success") =>
@@ -230,6 +242,7 @@ function LessonPlans() {
         setProgramName(saved.programName);
         setSelectedPlanId(saved.id);
         setEditor(undefined);
+        setManaging(false);
         showNotice("강의계획서를 저장했습니다.");
       },
       onError: (error: unknown) =>
@@ -237,15 +250,15 @@ function LessonPlans() {
           error instanceof Error
             ? error.message
             : "강의계획서를 저장하지 못했습니다.",
-          "error",
+          "error"
         ),
-    },
+    }
   );
 
   const startNew = () => {
     const initialTerm = term || "spring";
     const initialProgramName = programName || "오감별";
-    setEditor({
+    beginEditor({
       kind: "new",
       year,
       term: initialTerm,
@@ -260,7 +273,7 @@ function LessonPlans() {
 
   const startEdit = () => {
     if (!detailQuery.data) return;
-    setEditor({
+    beginEditor({
       kind: "edit",
       id: detailQuery.data.id,
       revision: detailQuery.data.revision,
@@ -288,11 +301,13 @@ function LessonPlans() {
 
   const startFullCopy = () => {
     if (!detailQuery.data) return;
-    setEditor({
+    beginEditor({
       kind: "copy",
       year: currentYear,
       term: detailQuery.data.term,
-      locationId: detailQuery.data.locationId,
+      locationId: detailQuery.data.locationActive
+        ? detailQuery.data.locationId
+        : activeLocations[0]?.id || "",
       programName: detailQuery.data.programName,
       sectionName: detailQuery.data.sectionName,
       curriculumId: null,
@@ -313,7 +328,10 @@ function LessonPlans() {
   };
 
   const cancelEditor = () => {
-    if (window.confirm("저장하지 않은 편집 내용을 취소할까요?")) {
+    if (
+      JSON.stringify(editor) === initialEditor.current ||
+      window.confirm("저장하지 않은 편집 내용을 취소할까요?")
+    ) {
       setEditor(undefined);
     }
   };
@@ -324,24 +342,28 @@ function LessonPlans() {
         ? {
             ...current,
             weeks: current.weeks.map((week) =>
-              week.week === weekNumber ? { ...week, ...changes } : week,
+              week.week === weekNumber ? { ...week, ...changes } : week
             ),
           }
-        : current,
+        : current
     );
   };
 
   const updateDocumentField = (
     field: keyof LessonPlanDocumentFields,
-    value: string,
+    value: string
   ) => {
     setEditor((current) =>
-      current ? { ...current, [field]: value } : current,
+      current ? { ...current, [field]: value } : current
     );
   };
 
   const openWeekCopy = () => {
-    setCopySourceId(plans.find((plan) => plan.id !== editor?.id)?.id || "");
+    setCopySourceId(
+      plans.find(
+        (plan) => plan.id !== editor?.id && plan.locationActive !== false
+      )?.id || ""
+    );
     setWeekMappings([]);
     setCopyDialogOpen(true);
   };
@@ -350,7 +372,7 @@ function LessonPlans() {
     setWeekMappings((current) =>
       checked
         ? [...current, { sourceWeek, targetWeek: sourceWeek }]
-        : current.filter((mapping) => mapping.sourceWeek !== sourceWeek),
+        : current.filter((mapping) => mapping.sourceWeek !== sourceWeek)
     );
   };
 
@@ -373,16 +395,16 @@ function LessonPlans() {
       !window.confirm(
         `${overwritten
           .map((week) => `${week}주차`)
-          .join(", ")}의 기존 내용을 덮어쓸까요?`,
+          .join(", ")}의 기존 내용을 덮어쓸까요?`
       )
     ) {
       return;
     }
     const sourceWeeks = new Map(
-      copySourceQuery.data.weeks.map((week) => [week.week, week]),
+      copySourceQuery.data.weeks.map((week) => [week.week, week])
     );
     const mappingByTarget = new Map(
-      weekMappings.map((mapping) => [mapping.targetWeek, mapping.sourceWeek]),
+      weekMappings.map((mapping) => [mapping.targetWeek, mapping.sourceWeek])
     );
     setEditor({
       ...editor,
@@ -407,9 +429,9 @@ function LessonPlans() {
   const editorLocationOptions = useMemo(() => {
     if (!editor) return activeLocations;
     const current = locations.find(
-      (location) => location.id === editor.locationId,
+      (location) => location.id === editor.locationId
     );
-    return current && !current.active
+    return editor.kind === "edit" && current && !current.active
       ? [current, ...activeLocations]
       : activeLocations;
   }, [activeLocations, editor, locations]);
@@ -421,8 +443,11 @@ function LessonPlans() {
         (curriculum) =>
           curriculum.year === editor.year &&
           curriculum.term === editor.term &&
-          curriculum.programName.normalize("NFC").trim().toLocaleLowerCase("ko") ===
-            editor.programName.normalize("NFC").trim().toLocaleLowerCase("ko"),
+          curriculum.programName
+            .normalize("NFC")
+            .trim()
+            .toLocaleLowerCase("ko") ===
+            editor.programName.normalize("NFC").trim().toLocaleLowerCase("ko")
       )
     : [];
 
@@ -435,14 +460,17 @@ function LessonPlans() {
     try {
       const curriculum = await queryClient.fetchQuery(
         ["lessonCurriculum", curriculumId],
-        () => api.lessonCurriculum(curriculumId),
+        () => api.lessonCurriculum(curriculumId)
       );
       setEditor((current) => {
         if (!current) return current;
         const sameIdentity =
           current.year === curriculum.year &&
           current.term === curriculum.term &&
-          current.programName.normalize("NFC").trim().toLocaleLowerCase("ko") ===
+          current.programName
+            .normalize("NFC")
+            .trim()
+            .toLocaleLowerCase("ko") ===
             curriculum.programName
               .normalize("NFC")
               .trim()
@@ -462,7 +490,7 @@ function LessonPlans() {
       showNotice(
         error instanceof Error
           ? error.message
-          : "공통 수업노트를 불러오지 못했습니다.",
+          : "공통 수업노트를 불러오지 못했습니다."
       );
     }
   };
@@ -470,8 +498,6 @@ function LessonPlans() {
   return (
     <main className="app-shell lesson-shell">
       <AppNavigation />
-
-
 
       <section className="lesson-toolbar" aria-label="강의계획서 검색 조건">
         <label>
@@ -508,7 +534,7 @@ function LessonPlans() {
             onChange={(event) => setLocationId(event.target.value)}
           >
             <option value="">전체 장소</option>
-            {locations.map((location) => (
+            {activeLocations.map((location) => (
               <option key={location.id} value={location.id}>
                 {location.name}
                 {location.active ? "" : " (사용 중지)"}
@@ -534,25 +560,27 @@ function LessonPlans() {
         <div className="lesson-toolbar-actions">
           <button
             className="button secondary"
-            type="button"
-            onClick={() => setLocationDialogOpen(true)}
+            onClick={() => setManaging(true)}
           >
-            <FiSettings /> 장소 관리
-          </button>
-          <button
-            className="button accent"
-            type="button"
-            onClick={startNew}
-            disabled={activeLocations.length === 0}
-          >
-            <FiPlus /> 신규 등록
-          </button>
+            계획서 관리
+          </button>{" "}
         </div>
       </section>
 
-      <RequestFailure error={plansQuery.error || locationsQuery.error || curriculaQuery.error || detailQuery.error} retry={() => {
-        void plansQuery.refetch(); void locationsQuery.refetch(); void curriculaQuery.refetch(); if (selectedPlanId) void detailQuery.refetch();
-      }} />
+      <RequestFailure
+        error={
+          plansQuery.error ||
+          locationsQuery.error ||
+          curriculaQuery.error ||
+          detailQuery.error
+        }
+        retry={() => {
+          void plansQuery.refetch();
+          void locationsQuery.refetch();
+          void curriculaQuery.refetch();
+          if (selectedPlanId) void detailQuery.refetch();
+        }}
+      />
       <div className="lesson-workspace">
         <aside className="plan-browser" aria-label="강의계획서 목록">
           <div className="plan-browser-heading">
@@ -590,7 +618,9 @@ function LessonPlans() {
                 </span>
               </button>
             ))}
-            {!plansQuery.isLoading && !plansQuery.isError && filteredPlans.length === 0 ? (
+            {!plansQuery.isLoading &&
+            !plansQuery.isError &&
+            filteredPlans.length === 0 ? (
               <div className="empty-state small">
                 <FiBookOpen />
                 <strong>조건에 맞는 계획서가 없습니다.</strong>
@@ -601,384 +631,7 @@ function LessonPlans() {
         </aside>
 
         <section className="plan-sheet" aria-label="강의계획서 상세">
-          {editor ? (
-            <form
-              className="plan-editor"
-              onSubmit={(event: FormEvent) => {
-                event.preventDefault();
-                saveMutation.mutate(editor);
-              }}
-            >
-              <header className="sheet-heading editor-heading">
-                <div>
-                  <span className="eyebrow">
-                    {editor.kind === "edit"
-                      ? "EDIT COURSE"
-                      : editor.kind === "copy"
-                        ? "COPY COURSE"
-                        : "NEW COURSE"}
-                  </span>
-                  <h2>
-                    {editor.kind === "edit"
-                      ? "계획서 수정"
-                      : editor.kind === "copy"
-                        ? "전체 복사본 등록"
-                        : "새 강의계획서"}
-                  </h2>
-                </div>
-                <div
-                  className={`editor-progress ${
-                    editorCompleted === 12 ? "complete" : ""
-                  }`}
-                >
-                  <strong>{editorCompleted}</strong>
-                  <span>/ 12주 작성</span>
-                </div>
-              </header>
-
-              {editor.kind === "copy" ? (
-                <p className="copy-guidance">
-                  복사할 대상의 연도·학기·장소·프로그램·수업 구분을 바꾸고
-                  내용을 수정한 뒤 저장하세요.
-                </p>
-              ) : null}
-
-              <div className="editor-meta">
-                <label>
-                  <span>연도</span>
-                  <input
-                    aria-label="계획서 연도"
-                    type="number"
-                    min="2000"
-                    max="9999"
-                    value={editor.year}
-                    onChange={(event) => {
-                      const nextYear = Number(event.target.value);
-                      setEditor({
-                        ...editor,
-                        year: nextYear,
-                        curriculumId:
-                          nextYear === editor.year ? editor.curriculumId : null,
-                      });
-                    }}
-                  />
-                </label>
-                <label>
-                  <span>학기</span>
-                  <select
-                    aria-label="계획서 학기"
-                    value={editor.term}
-                    onChange={(event) => {
-                      const nextTerm = event.target.value as LessonTerm;
-                      setEditor({
-                        ...editor,
-                        term: nextTerm,
-                        curriculumId:
-                          nextTerm === editor.term ? editor.curriculumId : null,
-                      });
-                    }}
-                  >
-                    {TERMS.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span>장소</span>
-                  <select
-                    aria-label="계획서 장소"
-                    value={editor.locationId}
-                    onChange={(event) =>
-                      setEditor({ ...editor, locationId: event.target.value })
-                    }
-                    required
-                  >
-                    <option value="">장소 선택</option>
-                    {editorLocationOptions.map((location) => (
-                      <option key={location.id} value={location.id}>
-                        {location.name}
-                        {location.active ? "" : " (사용 중지)"}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span>프로그램명</span>
-                  <input
-                    aria-label="계획서 프로그램명"
-                    value={editor.programName}
-                    onChange={(event) => {
-                      const programName = event.target.value;
-                      setEditor({
-                        ...editor,
-                        programName,
-                        curriculumId:
-                          programName === editor.programName
-                            ? editor.curriculumId
-                            : null,
-                      });
-                    }}
-                    placeholder="예: 오감별"
-                    required
-                  />
-                </label>
-                <label>
-                  <span>수업 구분</span>
-                  <input
-                    aria-label="계획서 수업 구분"
-                    value={editor.sectionName}
-                    onChange={(event) =>
-                      setEditor({ ...editor, sectionName: event.target.value })
-                    }
-                    placeholder="예: 월요일, 8주"
-                  />
-                </label>
-                <label>
-                  <span>공통 수업노트</span>
-                  <select
-                    aria-label="계획서 공통 수업노트"
-                    value={editor.curriculumId || ""}
-                    onChange={(event) => selectCurriculum(event.target.value)}
-                  >
-                    <option value="">연결하지 않음</option>
-                    {editorCurricula.map((curriculum) => (
-                      <option key={curriculum.id} value={curriculum.id}>
-                        {curriculum.year}년 {TERM_LABELS[curriculum.term]} ·{" "}
-                        {curriculum.programName}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  className="button secondary copy-weeks-button"
-                  type="button"
-                  onClick={openWeekCopy}
-                  disabled={plans.length === 0}
-                >
-                  <FiClipboard /> 주차 가져오기
-                </button>
-              </div>
-
-              <section
-                className="document-editor"
-                aria-labelledby="document-editor-title"
-              >
-                <div className="document-section-heading">
-                  <div>
-                    <span className="eyebrow">HWP DOCUMENT FIELDS</span>
-                    <h3 id="document-editor-title">문서 표기 정보</h3>
-                  </div>
-                  <span>DOCX에 그대로 표시됩니다.</span>
-                </div>
-                <div className="document-field-grid">
-                  <label className="document-field-wide">
-                    <span>문서 제목</span>
-                    <input
-                      aria-label="문서 제목"
-                      value={editor.documentTitle}
-                      onChange={(event) =>
-                        updateDocumentField("documentTitle", event.target.value)
-                      }
-                    />
-                  </label>
-                  <label>
-                    <span>강좌명</span>
-                    <input
-                      aria-label="문서 강좌명"
-                      value={editor.courseName}
-                      onChange={(event) =>
-                        updateDocumentField("courseName", event.target.value)
-                      }
-                    />
-                  </label>
-                  <label>
-                    <span>강사명</span>
-                    <input
-                      aria-label="문서 강사명"
-                      value={editor.instructorName}
-                      onChange={(event) =>
-                        updateDocumentField(
-                          "instructorName",
-                          event.target.value,
-                        )
-                      }
-                    />
-                  </label>
-                  <label>
-                    <span>대표 프로필</span>
-                    <input
-                      aria-label="대표 프로필"
-                      value={editor.representativeProfile}
-                      onChange={(event) =>
-                        updateDocumentField(
-                          "representativeProfile",
-                          event.target.value,
-                        )
-                      }
-                    />
-                  </label>
-                  <label>
-                    <span>강의 대상</span>
-                    <input
-                      aria-label="강의 대상"
-                      value={editor.audience}
-                      onChange={(event) =>
-                        updateDocumentField("audience", event.target.value)
-                      }
-                    />
-                  </label>
-                  <label>
-                    <span>정원</span>
-                    <input
-                      aria-label="정원"
-                      value={editor.capacity}
-                      onChange={(event) =>
-                        updateDocumentField("capacity", event.target.value)
-                      }
-                    />
-                  </label>
-                  <label>
-                    <span>교육비</span>
-                    <input
-                      aria-label="교육비"
-                      value={editor.tuition}
-                      onChange={(event) =>
-                        updateDocumentField("tuition", event.target.value)
-                      }
-                    />
-                  </label>
-                  <label>
-                    <span>교재비</span>
-                    <input
-                      aria-label="교재비"
-                      value={editor.materialFee}
-                      onChange={(event) =>
-                        updateDocumentField("materialFee", event.target.value)
-                      }
-                    />
-                  </label>
-                  <label className="document-field-wide">
-                    <span>강좌 소개</span>
-                    <textarea
-                      aria-label="강좌 소개"
-                      rows={3}
-                      value={editor.courseIntroduction}
-                      onChange={(event) =>
-                        updateDocumentField(
-                          "courseIntroduction",
-                          event.target.value,
-                        )
-                      }
-                    />
-                  </label>
-                  <label className="document-field-wide">
-                    <span>세부 연령·개월 및 강의 일정</span>
-                    <textarea
-                      aria-label="세부 연령 및 강의 일정"
-                      rows={3}
-                      value={editor.scheduleDetails}
-                      onChange={(event) =>
-                        updateDocumentField(
-                          "scheduleDetails",
-                          event.target.value,
-                        )
-                      }
-                    />
-                  </label>
-                  <label className="document-field-wide">
-                    <span>공개강좌</span>
-                    <textarea
-                      aria-label="공개강좌"
-                      rows={2}
-                      value={editor.openLecture}
-                      onChange={(event) =>
-                        updateDocumentField("openLecture", event.target.value)
-                      }
-                    />
-                  </label>
-                  <label className="document-field-wide">
-                    <span>하단 안내문</span>
-                    <input
-                      aria-label="하단 안내문"
-                      value={editor.notice}
-                      onChange={(event) =>
-                        updateDocumentField("notice", event.target.value)
-                      }
-                    />
-                  </label>
-                </div>
-              </section>
-
-              {editor.curriculumId ? (
-                <p className="copy-guidance shared-curriculum-guidance">
-                  수업명과 수업내용은 연결된 공통 수업노트에서 관리합니다.
-                  필기·진행 플랜·사용 교구는 강의계획서와 DOCX에 포함되지 않습니다.
-                </p>
-              ) : null}
-
-              <div className="week-grid week-grid-header" aria-hidden="true">
-                <span>주차</span>
-                <span>수업명</span>
-                <span>수업내용</span>
-              </div>
-              <div className="week-editor-list">
-                {editor.weeks.map((week) => (
-                  <div className="week-grid week-editor-row" key={week.week}>
-                    <div className="week-number">
-                      <b>{String(week.week).padStart(2, "0")}</b>
-                      <span>주차</span>
-                    </div>
-                    <label>
-                      <span className="mobile-field-label">수업명</span>
-                      <input
-                        aria-label={`${week.week}주차 수업명`}
-                        value={week.className}
-                        onChange={(event) =>
-                          updateWeek(week.week, {
-                            className: event.target.value,
-                          })
-                        }
-                        placeholder="수업명을 입력하세요"
-                        disabled={Boolean(editor.curriculumId)}
-                      />
-                    </label>
-                    <label>
-                      <span className="mobile-field-label">수업내용</span>
-                      <textarea
-                        aria-label={`${week.week}주차 수업내용`}
-                        value={week.content}
-                        onChange={(event) =>
-                          updateWeek(week.week, { content: event.target.value })
-                        }
-                        placeholder="수업내용을 입력하세요"
-                        rows={2}
-                        disabled={Boolean(editor.curriculumId)}
-                      />
-                    </label>
-                  </div>
-                ))}
-              </div>
-              <footer className="sheet-actions">
-                <button
-                  className="button ghost"
-                  type="button"
-                  onClick={cancelEditor}
-                >
-                  취소
-                </button>
-                <button
-                  className="button accent"
-                  type="submit"
-                  disabled={saveMutation.isLoading || !editor.locationId}
-                >
-                  <FiSave />{" "}
-                  {saveMutation.isLoading ? "저장 중..." : "임시저장"}
-                </button>
-              </footer>
-            </form>
-          ) : selectedDetail ? (
+          {selectedDetail ? (
             <article className="plan-detail">
               <header className="sheet-heading">
                 <div>
@@ -1007,20 +660,6 @@ function LessonPlans() {
                   >
                     <FiDownload /> DOCX 다운로드
                   </a>
-                  <button
-                    className="button secondary"
-                    type="button"
-                    onClick={startFullCopy}
-                  >
-                    <FiCopy /> 전체 복사
-                  </button>
-                  <button
-                    className="button accent"
-                    type="button"
-                    onClick={startEdit}
-                  >
-                    <FiEdit2 /> 수정
-                  </button>
                 </div>
               </header>
               <div className="detail-status-line">
@@ -1134,126 +773,626 @@ function LessonPlans() {
         ) : null}
       </div>
 
-      {locationDialogOpen ? (
-        <LessonLocationDialog
-          locations={locations}
-          onClose={() => setLocationDialogOpen(false)}
-          onNotice={showNotice}
-        />
-      ) : null}
-
-      {copyDialogOpen && editor ? (
-        <div className="modal-backdrop" role="presentation">
-          <section
-            className="dialog-card week-copy-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="week-copy-title"
-          >
-            <header className="dialog-heading">
-              <div>
-                <span className="eyebrow">IMPORT WEEKS</span>
-                <h2 id="week-copy-title">특정 주차 가져오기</h2>
-              </div>
-              <button
-                type="button"
-                className="icon-button"
-                aria-label="주차 가져오기 닫기"
-                onClick={() => setCopyDialogOpen(false)}
-              >
-                <FiX />
-              </button>
-            </header>
-            <label className="copy-source-select">
-              <span>원본 계획서</span>
-              <select
-                value={copySourceId}
-                onChange={(event) => {
-                  setCopySourceId(event.target.value);
-                  setWeekMappings([]);
-                }}
-              >
-                <option value="">원본 선택</option>
-                {plans.map((plan) => (
-                  <option key={plan.id} value={plan.id}>
-                    {plan.year}년 {TERM_LABELS[plan.term]} · {plan.programName}{" "}
-                    · {plan.locationName}
-                    {plan.sectionName ? ` · ${plan.sectionName}` : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="copy-week-list">
-              {copySourceQuery.data?.weeks.map((week) => {
-                const mapping = weekMappings.find(
-                  (item) => item.sourceWeek === week.week,
-                );
-                return (
-                  <div
-                    className={`copy-week-row ${mapping ? "selected" : ""}`}
-                    key={week.week}
+      {managing && (
+        <ManagementDialog
+          title="계획서 관리"
+          wide
+          busy={saveMutation.isLoading || centersBusy}
+          onClose={() => {
+            if (locationDialogOpen) setLocationDialogOpen(false);
+            else if (copyDialogOpen) setCopyDialogOpen(false);
+            else if (editor) cancelEditor();
+            else setManaging(false);
+          }}
+        >
+          {locationDialogOpen ? (
+            <CenterManager
+              onBack={() => setLocationDialogOpen(false)}
+              onBusyChange={setCentersBusy}
+            />
+          ) : (
+            <>
+              {notice && (
+                <p role={notice.type === "error" ? "alert" : "status"}>
+                  {notice.message}
+                </p>
+              )}
+              {!editor && (
+                <div className="management-actions">
+                  <button disabled={!activeLocations.length} onClick={startNew}>
+                    신규 등록
+                  </button>
+                  <button disabled={!selectedDetail} onClick={startEdit}>
+                    수정
+                  </button>
+                  <button
+                    disabled={!selectedDetail || !activeLocations.length}
+                    onClick={startFullCopy}
                   >
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(mapping)}
-                        onChange={(event) =>
-                          toggleSourceWeek(week.week, event.target.checked)
-                        }
-                      />
-                      <b>{week.week}주차</b>
-                      <span>{week.className || "미작성"}</span>
-                    </label>
-                    <select
-                      aria-label={`${week.week}주차 대상 주차`}
-                      value={mapping?.targetWeek || week.week}
-                      disabled={!mapping}
-                      onChange={(event) =>
-                        setWeekMappings((current) =>
-                          current.map((item) =>
-                            item.sourceWeek === week.week
-                              ? {
-                                  ...item,
-                                  targetWeek: Number(event.target.value),
-                                }
-                              : item,
-                          ),
-                        )
-                      }
+                    전체 복사
+                  </button>
+                  <button onClick={() => setLocationDialogOpen(true)}>
+                    공통 센터 관리
+                  </button>
+                </div>
+              )}
+              {editor && (
+                <div hidden={copyDialogOpen}>
+                  <fieldset
+                    disabled={saveMutation.isLoading}
+                    style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
+                  >
+                    <form
+                      className="plan-editor"
+                      onSubmit={(event: FormEvent) => {
+                        event.preventDefault();
+                        if (!saveMutation.isLoading)
+                          saveMutation.mutate(editor);
+                      }}
                     >
-                      {createEmptyWeeks().map((target) => (
-                        <option key={target.week} value={target.week}>
-                          → {target.week}주차
-                        </option>
-                      ))}
+                      <header className="sheet-heading editor-heading">
+                        <div>
+                          <span className="eyebrow">
+                            {editor.kind === "edit"
+                              ? "EDIT COURSE"
+                              : editor.kind === "copy"
+                              ? "COPY COURSE"
+                              : "NEW COURSE"}
+                          </span>
+                          <h2>
+                            {editor.kind === "edit"
+                              ? "계획서 수정"
+                              : editor.kind === "copy"
+                              ? "전체 복사본 등록"
+                              : "새 강의계획서"}
+                          </h2>
+                        </div>
+                        <div
+                          className={`editor-progress ${
+                            editorCompleted === 12 ? "complete" : ""
+                          }`}
+                        >
+                          <strong>{editorCompleted}</strong>
+                          <span>/ 12주 작성</span>
+                        </div>
+                      </header>
+
+                      {editor.kind === "copy" ? (
+                        <p className="copy-guidance">
+                          복사할 대상의 연도·학기·장소·프로그램·수업 구분을
+                          바꾸고 내용을 수정한 뒤 저장하세요.
+                        </p>
+                      ) : null}
+
+                      <button
+                        type="button"
+                        className="button secondary"
+                        onClick={() => setLocationDialogOpen(true)}
+                      >
+                        공통 센터 관리
+                      </button>
+                      {editor.kind !== "edit" &&
+                        editor.locationId &&
+                        !activeLocations.some(
+                          (l) => l.id === editor.locationId
+                        ) && (
+                          <p role="alert">
+                            사용 중인 센터를 선택하세요. 작성 내용은 유지됩니다.
+                          </p>
+                        )}
+                      <div className="editor-meta">
+                        <label>
+                          <span>연도</span>
+                          <input
+                            aria-label="계획서 연도"
+                            type="number"
+                            min="2000"
+                            max="9999"
+                            value={editor.year}
+                            onChange={(event) => {
+                              const nextYear = Number(event.target.value);
+                              setEditor({
+                                ...editor,
+                                year: nextYear,
+                                curriculumId:
+                                  nextYear === editor.year
+                                    ? editor.curriculumId
+                                    : null,
+                              });
+                            }}
+                          />
+                        </label>
+                        <label>
+                          <span>학기</span>
+                          <select
+                            aria-label="계획서 학기"
+                            value={editor.term}
+                            onChange={(event) => {
+                              const nextTerm = event.target.value as LessonTerm;
+                              setEditor({
+                                ...editor,
+                                term: nextTerm,
+                                curriculumId:
+                                  nextTerm === editor.term
+                                    ? editor.curriculumId
+                                    : null,
+                              });
+                            }}
+                          >
+                            {TERMS.map((item) => (
+                              <option key={item.value} value={item.value}>
+                                {item.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          <span>장소</span>
+                          <select
+                            aria-label="계획서 장소"
+                            value={editor.locationId}
+                            onChange={(event) =>
+                              setEditor({
+                                ...editor,
+                                locationId: event.target.value,
+                              })
+                            }
+                            required
+                          >
+                            <option value="">장소 선택</option>
+                            {editorLocationOptions.map((location) => (
+                              <option key={location.id} value={location.id}>
+                                {location.name}
+                                {location.active ? "" : " (사용 중지)"}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          <span>프로그램명</span>
+                          <input
+                            aria-label="계획서 프로그램명"
+                            value={editor.programName}
+                            onChange={(event) => {
+                              const programName = event.target.value;
+                              setEditor({
+                                ...editor,
+                                programName,
+                                curriculumId:
+                                  programName === editor.programName
+                                    ? editor.curriculumId
+                                    : null,
+                              });
+                            }}
+                            placeholder="예: 오감별"
+                            required
+                          />
+                        </label>
+                        <label>
+                          <span>수업 구분</span>
+                          <input
+                            aria-label="계획서 수업 구분"
+                            value={editor.sectionName}
+                            onChange={(event) =>
+                              setEditor({
+                                ...editor,
+                                sectionName: event.target.value,
+                              })
+                            }
+                            placeholder="예: 월요일, 8주"
+                          />
+                        </label>
+                        <label>
+                          <span>공통 수업노트</span>
+                          <select
+                            aria-label="계획서 공통 수업노트"
+                            value={editor.curriculumId || ""}
+                            onChange={(event) =>
+                              selectCurriculum(event.target.value)
+                            }
+                          >
+                            <option value="">연결하지 않음</option>
+                            {editorCurricula.map((curriculum) => (
+                              <option key={curriculum.id} value={curriculum.id}>
+                                {curriculum.year}년{" "}
+                                {TERM_LABELS[curriculum.term]} ·{" "}
+                                {curriculum.programName}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <button
+                          className="button secondary copy-weeks-button"
+                          type="button"
+                          onClick={openWeekCopy}
+                          disabled={
+                            !plans.some(
+                              (plan) => plan.locationActive !== false
+                            ) || Boolean(editor.curriculumId)
+                          }
+                        >
+                          <FiClipboard /> 주차 가져오기
+                        </button>
+                      </div>
+
+                      <section
+                        className="document-editor"
+                        aria-labelledby="document-editor-title"
+                      >
+                        <div className="document-section-heading">
+                          <div>
+                            <span className="eyebrow">HWP DOCUMENT FIELDS</span>
+                            <h3 id="document-editor-title">문서 표기 정보</h3>
+                          </div>
+                          <span>DOCX에 그대로 표시됩니다.</span>
+                        </div>
+                        <div className="document-field-grid">
+                          <label className="document-field-wide">
+                            <span>문서 제목</span>
+                            <input
+                              aria-label="문서 제목"
+                              value={editor.documentTitle}
+                              onChange={(event) =>
+                                updateDocumentField(
+                                  "documentTitle",
+                                  event.target.value
+                                )
+                              }
+                            />
+                          </label>
+                          <label>
+                            <span>강좌명</span>
+                            <input
+                              aria-label="문서 강좌명"
+                              value={editor.courseName}
+                              onChange={(event) =>
+                                updateDocumentField(
+                                  "courseName",
+                                  event.target.value
+                                )
+                              }
+                            />
+                          </label>
+                          <label>
+                            <span>강사명</span>
+                            <input
+                              aria-label="문서 강사명"
+                              value={editor.instructorName}
+                              onChange={(event) =>
+                                updateDocumentField(
+                                  "instructorName",
+                                  event.target.value
+                                )
+                              }
+                            />
+                          </label>
+                          <label>
+                            <span>대표 프로필</span>
+                            <input
+                              aria-label="대표 프로필"
+                              value={editor.representativeProfile}
+                              onChange={(event) =>
+                                updateDocumentField(
+                                  "representativeProfile",
+                                  event.target.value
+                                )
+                              }
+                            />
+                          </label>
+                          <label>
+                            <span>강의 대상</span>
+                            <input
+                              aria-label="강의 대상"
+                              value={editor.audience}
+                              onChange={(event) =>
+                                updateDocumentField(
+                                  "audience",
+                                  event.target.value
+                                )
+                              }
+                            />
+                          </label>
+                          <label>
+                            <span>정원</span>
+                            <input
+                              aria-label="정원"
+                              value={editor.capacity}
+                              onChange={(event) =>
+                                updateDocumentField(
+                                  "capacity",
+                                  event.target.value
+                                )
+                              }
+                            />
+                          </label>
+                          <label>
+                            <span>교육비</span>
+                            <input
+                              aria-label="교육비"
+                              value={editor.tuition}
+                              onChange={(event) =>
+                                updateDocumentField(
+                                  "tuition",
+                                  event.target.value
+                                )
+                              }
+                            />
+                          </label>
+                          <label>
+                            <span>교재비</span>
+                            <input
+                              aria-label="교재비"
+                              value={editor.materialFee}
+                              onChange={(event) =>
+                                updateDocumentField(
+                                  "materialFee",
+                                  event.target.value
+                                )
+                              }
+                            />
+                          </label>
+                          <label className="document-field-wide">
+                            <span>강좌 소개</span>
+                            <textarea
+                              aria-label="강좌 소개"
+                              rows={3}
+                              value={editor.courseIntroduction}
+                              onChange={(event) =>
+                                updateDocumentField(
+                                  "courseIntroduction",
+                                  event.target.value
+                                )
+                              }
+                            />
+                          </label>
+                          <label className="document-field-wide">
+                            <span>세부 연령·개월 및 강의 일정</span>
+                            <textarea
+                              aria-label="세부 연령 및 강의 일정"
+                              rows={3}
+                              value={editor.scheduleDetails}
+                              onChange={(event) =>
+                                updateDocumentField(
+                                  "scheduleDetails",
+                                  event.target.value
+                                )
+                              }
+                            />
+                          </label>
+                          <label className="document-field-wide">
+                            <span>공개강좌</span>
+                            <textarea
+                              aria-label="공개강좌"
+                              rows={2}
+                              value={editor.openLecture}
+                              onChange={(event) =>
+                                updateDocumentField(
+                                  "openLecture",
+                                  event.target.value
+                                )
+                              }
+                            />
+                          </label>
+                          <label className="document-field-wide">
+                            <span>하단 안내문</span>
+                            <input
+                              aria-label="하단 안내문"
+                              value={editor.notice}
+                              onChange={(event) =>
+                                updateDocumentField(
+                                  "notice",
+                                  event.target.value
+                                )
+                              }
+                            />
+                          </label>
+                        </div>
+                      </section>
+
+                      {editor.curriculumId ? (
+                        <p className="copy-guidance shared-curriculum-guidance">
+                          수업명과 수업내용은 연결된 공통 수업노트에서
+                          관리합니다. 필기·진행 플랜·사용 교구는 강의계획서와
+                          DOCX에 포함되지 않습니다.
+                        </p>
+                      ) : null}
+
+                      <div
+                        className="week-grid week-grid-header"
+                        aria-hidden="true"
+                      >
+                        <span>주차</span>
+                        <span>수업명</span>
+                        <span>수업내용</span>
+                      </div>
+                      <div className="week-editor-list">
+                        {editor.weeks.map((week) => (
+                          <div
+                            className="week-grid week-editor-row"
+                            key={week.week}
+                          >
+                            <div className="week-number">
+                              <b>{String(week.week).padStart(2, "0")}</b>
+                              <span>주차</span>
+                            </div>
+                            <label>
+                              <span className="mobile-field-label">수업명</span>
+                              <input
+                                aria-label={`${week.week}주차 수업명`}
+                                value={week.className}
+                                onChange={(event) =>
+                                  updateWeek(week.week, {
+                                    className: event.target.value,
+                                  })
+                                }
+                                placeholder="수업명을 입력하세요"
+                                disabled={Boolean(editor.curriculumId)}
+                              />
+                            </label>
+                            <label>
+                              <span className="mobile-field-label">
+                                수업내용
+                              </span>
+                              <textarea
+                                aria-label={`${week.week}주차 수업내용`}
+                                value={week.content}
+                                onChange={(event) =>
+                                  updateWeek(week.week, {
+                                    content: event.target.value,
+                                  })
+                                }
+                                placeholder="수업내용을 입력하세요"
+                                rows={2}
+                                disabled={Boolean(editor.curriculumId)}
+                              />
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                      <footer className="sheet-actions">
+                        <button
+                          className="button ghost"
+                          type="button"
+                          onClick={cancelEditor}
+                        >
+                          취소
+                        </button>
+                        <button
+                          className="button accent"
+                          type="submit"
+                          disabled={
+                            saveMutation.isLoading ||
+                            !editor.locationId ||
+                            (editor.kind !== "edit" &&
+                              !activeLocations.some(
+                                (l) => l.id === editor.locationId
+                              ))
+                          }
+                        >
+                          <FiSave />{" "}
+                          {saveMutation.isLoading ? "저장 중..." : "임시저장"}
+                        </button>
+                      </footer>
+                    </form>
+                  </fieldset>
+                </div>
+              )}
+              {copyDialogOpen && editor ? (
+                <section className="week-copy-dialog">
+                  <header className="dialog-heading">
+                    <div>
+                      <span className="eyebrow">IMPORT WEEKS</span>
+                      <h2 id="week-copy-title">특정 주차 가져오기</h2>
+                    </div>
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label="주차 가져오기 닫기"
+                      onClick={() => setCopyDialogOpen(false)}
+                    >
+                      <FiX />
+                    </button>
+                  </header>
+                  <label className="copy-source-select">
+                    <span>원본 계획서</span>
+                    <select
+                      value={copySourceId}
+                      onChange={(event) => {
+                        setCopySourceId(event.target.value);
+                        setWeekMappings([]);
+                      }}
+                    >
+                      <option value="">원본 선택</option>
+                      {plans
+                        .filter((plan) => plan.locationActive !== false)
+                        .map((plan) => (
+                          <option key={plan.id} value={plan.id}>
+                            {plan.year}년 {TERM_LABELS[plan.term]} ·{" "}
+                            {plan.programName} · {plan.locationName}
+                            {plan.sectionName ? ` · ${plan.sectionName}` : ""}
+                          </option>
+                        ))}
                     </select>
+                  </label>
+                  <div className="copy-week-list">
+                    {copySourceQuery.data?.weeks.map((week) => {
+                      const mapping = weekMappings.find(
+                        (item) => item.sourceWeek === week.week
+                      );
+                      return (
+                        <div
+                          className={`copy-week-row ${
+                            mapping ? "selected" : ""
+                          }`}
+                          key={week.week}
+                        >
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={Boolean(mapping)}
+                              onChange={(event) =>
+                                toggleSourceWeek(
+                                  week.week,
+                                  event.target.checked
+                                )
+                              }
+                            />
+                            <b>{week.week}주차</b>
+                            <span>{week.className || "미작성"}</span>
+                          </label>
+                          <select
+                            aria-label={`${week.week}주차 대상 주차`}
+                            value={mapping?.targetWeek || week.week}
+                            disabled={!mapping}
+                            onChange={(event) =>
+                              setWeekMappings((current) =>
+                                current.map((item) =>
+                                  item.sourceWeek === week.week
+                                    ? {
+                                        ...item,
+                                        targetWeek: Number(event.target.value),
+                                      }
+                                    : item
+                                )
+                              )
+                            }
+                          >
+                            {createEmptyWeeks().map((target) => (
+                              <option key={target.week} value={target.week}>
+                                → {target.week}주차
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    })}
+                    {copySourceId && copySourceQuery.isLoading ? (
+                      <div className="loading-state">원본을 불러오는 중...</div>
+                    ) : null}
                   </div>
-                );
-              })}
-              {copySourceId && copySourceQuery.isLoading ? (
-                <div className="loading-state">원본을 불러오는 중...</div>
+                  <div className="dialog-actions">
+                    <button
+                      className="button ghost"
+                      type="button"
+                      onClick={() => setCopyDialogOpen(false)}
+                    >
+                      취소
+                    </button>
+                    <button
+                      className="button accent"
+                      type="button"
+                      onClick={applyWeekCopy}
+                      disabled={weekMappings.length === 0}
+                    >
+                      선택 주차 가져오기
+                    </button>
+                  </div>
+                </section>
               ) : null}
-            </div>
-            <div className="dialog-actions">
-              <button
-                className="button ghost"
-                type="button"
-                onClick={() => setCopyDialogOpen(false)}
-              >
-                취소
-              </button>
-              <button
-                className="button accent"
-                type="button"
-                onClick={applyWeekCopy}
-                disabled={weekMappings.length === 0}
-              >
-                선택 주차 가져오기
-              </button>
-            </div>
-          </section>
-        </div>
-      ) : null}
+            </>
+          )}
+        </ManagementDialog>
+      )}
     </main>
   );
 }

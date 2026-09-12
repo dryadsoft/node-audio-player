@@ -1,5 +1,11 @@
 import "@testing-library/jest-dom";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import Attendance from "./Attendance";
 import { useAttendance } from "../attendance/workspace";
@@ -133,6 +139,7 @@ it("allows adding the same location on another weekday without changing the sele
     </MemoryRouter>
   );
   fireEvent.click(await screen.findByText(/센터 · 화/));
+  fireEvent.click(screen.getByRole("button", { name: "출석부 관리" }));
   fireEvent.change(screen.getByLabelText("이 학기에 센터 추가"), {
     target: { value: "loc" },
   });
@@ -168,15 +175,17 @@ it("refreshes a conflicting weekday edit and keeps the add form independent", as
     </MemoryRouter>
   );
   fireEvent.click(await screen.findByText(/센터 · 화/));
+  fireEvent.click(screen.getByRole("button", { name: "출석부 관리" }));
   fireEvent.change(screen.getByLabelText("수업 요일"), {
     target: { value: "3" },
   });
+  fireEvent.click(screen.getByRole("button", { name: "요일 저장" }));
   await waitFor(() => expect(workspace.refresh).toHaveBeenCalled());
   expect(save).toHaveBeenCalledWith(
     expect.objectContaining({ id: "center", weekday: 3, expectedRevision: 1 })
   );
   expect(screen.getByLabelText("요일")).toHaveValue("1");
-  expect(screen.getByLabelText("수업 요일")).toHaveValue("2");
+  expect(screen.getByLabelText("수업 요일")).toHaveValue("3");
   expect(screen.getAllByRole("alert")[0]).toHaveTextContent(
     "이미 등록된 센터·요일"
   );
@@ -219,6 +228,7 @@ it("trashes and restores only the selected weekday while preserving its periods"
     )
   );
   fireEvent.click(await screen.findByText(/센터 · 화/));
+  fireEvent.click(screen.getByRole("button", { name: "출석부 관리" }));
   fireEvent.click(screen.getByRole("button", { name: "센터 삭제" }));
   await waitFor(() =>
     expect(screen.getByLabelText("센터 선택")).toHaveValue("other")
@@ -289,6 +299,7 @@ it("shows an empty selection after deleting the last center and respects cancell
     )
   );
   fireEvent.click(await screen.findByText(/센터 · 화/));
+  fireEvent.click(screen.getByRole("button", { name: "출석부 관리" }));
   fireEvent.click(screen.getByRole("button", { name: "센터 삭제" }));
   expect(save).not.toHaveBeenCalled();
   confirm.mockReturnValue(true);
@@ -306,6 +317,7 @@ it("blocks center deletion during unsent or unsaved work and offline management"
   );
   const view = render(ui);
   fireEvent.click(await screen.findByText(/센터 · 화/));
+  fireEvent.click(screen.getByRole("button", { name: "출석부 관리" }));
   expect(screen.getByRole("button", { name: "센터 삭제" })).toBeDisabled();
   expect(
     screen.getByText(/미전송 페이지·필기와 기기 저장/)
@@ -360,7 +372,9 @@ it("allows restoring remote trash with pending local ink using the remote revisi
     </MemoryRouter>
   );
   fireEvent.click(await screen.findByText(/센터 · 화/));
+  fireEvent.click(screen.getByRole("button", { name: "출석부 관리" }));
   fireEvent.click(screen.getByRole("checkbox", { name: "휴지통 포함" }));
+  fireEvent.click(screen.getByRole("button", { name: "페이지", exact: true }));
   const restore = await screen.findByRole("button", {
     name: "복구",
     exact: true,
@@ -467,4 +481,122 @@ it("adds a note from the empty sheet while offline and selects it", async () => 
   );
   expect(workspace.addNote).toHaveBeenCalledWith(state.target, "p1");
   expect(workspace.store.photo).not.toHaveBeenCalled();
+});
+
+it("shows only active locations once and opens a weekday's lesson without management writes", async () => {
+  const catalog = state.catalogs[0];
+  catalog.locations.push({
+    ...catalog.locations[0],
+    id: "old",
+    name: "그만둔 센터",
+    active: false,
+  });
+  catalog.centers.push(
+    { ...catalog.centers[0], id: "wed", weekday: 3 },
+    { ...catalog.centers[0], id: "old-center", locationId: "old" }
+  );
+  catalog.periods.push({
+    ...catalog.periods[0],
+    id: "wed-period",
+    centerId: "wed",
+    name: "수요일 수업",
+  });
+  const save = jest.spyOn(attendanceApi, "center");
+  render(
+    <MemoryRouter>
+      <Attendance />
+    </MemoryRouter>
+  );
+  fireEvent.click(await screen.findByText(/센터 · 화/));
+  const dialog = screen.getByRole("dialog", { name: "출석부 선택" });
+  expect(within(dialog).queryByText("그만둔 센터")).not.toBeInTheDocument();
+  expect(
+    within(screen.getByLabelText("센터 선택")).getAllByRole("option")
+  ).toHaveLength(2);
+  expect(
+    within(dialog).queryByRole("button", { name: "센터 추가" })
+  ).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("요일 선택"), {
+    target: { value: "wed" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "수요일 수업", exact: true })
+  );
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(screen.getByText(/센터 · 수/)).toBeInTheDocument();
+  expect(save).not.toHaveBeenCalled();
+});
+
+it("keeps the writing canvas while managing another center and after current center deactivation", async () => {
+  state.catalogs[0].pages[0].deletedAt = null;
+  state.pages[0].remoteDeleted = false;
+  state.pages[0].local.pageType = "note";
+  state.catalogs[0].centers.push({
+    ...state.catalogs[0].centers[0],
+    id: "other",
+    weekday: 4,
+  });
+  const view = render(
+    <MemoryRouter>
+      <Attendance />
+    </MemoryRouter>
+  );
+  const canvas = await screen.findByLabelText("출석부 줄노트 필기");
+  fireEvent.click(screen.getByText(/센터 · 화/));
+  fireEvent.click(screen.getByRole("button", { name: "출석부 관리" }));
+  fireEvent.change(screen.getByLabelText("센터 선택"), {
+    target: { value: "other" },
+  });
+  expect(screen.getByLabelText("출석부 줄노트 필기")).toBe(canvas);
+  fireEvent.click(screen.getByRole("button", { name: "출석부 관리 닫기" }));
+  fireEvent.click(screen.getByRole("button", { name: "출석부 선택 닫기" }));
+  state.catalogs = state.catalogs.map((c) => ({
+    ...c,
+    locations: c.locations.map((l) => ({ ...l, active: false })),
+  }));
+  view.rerender(
+    <MemoryRouter>
+      <Attendance />
+    </MemoryRouter>
+  );
+  expect(screen.getByLabelText("출석부 줄노트 필기")).toBe(canvas);
+  fireEvent.click(screen.getByText(/센터 · 화/));
+  expect(
+    within(screen.getByLabelText("센터 선택")).getAllByRole("option")
+  ).toHaveLength(1);
+  fireEvent.click(screen.getByRole("button", { name: "출석부 관리" }));
+  fireEvent.click(screen.getByLabelText("사용 중지 센터 포함"));
+  expect(
+    within(screen.getByLabelText("센터 선택")).getAllByRole("option")
+  ).toHaveLength(3);
+});
+
+it("starts on an active center instead of reopening a stopped center by default", async () => {
+  const c = state.catalogs[0];
+  c.locations[0].active = false;
+  c.locations.push({
+    ...c.locations[0],
+    id: "active-location",
+    name: "활성 센터",
+    active: true,
+  });
+  c.centers.push({
+    ...c.centers[0],
+    id: "active-center",
+    locationId: "active-location",
+    weekday: 4,
+  });
+  c.periods.push({
+    ...c.periods[0],
+    id: "active-period",
+    centerId: "active-center",
+    name: "목요일 수업",
+  });
+  render(
+    <MemoryRouter>
+      <Attendance />
+    </MemoryRouter>
+  );
+  expect(await screen.findByText(/활성 센터 · 목/)).toBeInTheDocument();
+  expect(screen.queryByText(/센터 · 화/)).not.toBeInTheDocument();
 });

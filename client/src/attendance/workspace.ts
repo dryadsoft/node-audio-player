@@ -1,7 +1,7 @@
 import { replaceStrokeGroup, strokeGroupChoice } from "../api/inkStrokeGroups";
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import { InkDocumentV2 } from "../types";
+import { InkDocumentV2, LessonLocation } from "../types";
 import { attendanceApi, AttendanceError } from "./api";
 import { AttendanceStore } from "./store";
 import {
@@ -325,6 +325,18 @@ export class AttendanceWorkspace {
       if (document.visibilityState === "hidden") this.schedule(5000);
       else void this.sync();
     }, delay);
+  }
+  async updateLocations(locations: LessonLocation[]) {
+    await this.hydrate();
+    if (this.running) await this.running;
+    try {
+      await this.store.locations(locations);
+      this.publish({ catalogs: this.state.catalogs.map(c => ({ ...c, locations })) });
+      this.signal();
+    } catch (error) {
+      this.storageFailure(error);
+      throw error;
+    }
   }
   async refresh() {
     if (this.running) await this.running;

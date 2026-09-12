@@ -1,3 +1,4 @@
+import { attendanceWorkspace } from "../attendance/workspace";
 import "@testing-library/jest-dom";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "react-query";
@@ -22,7 +23,7 @@ const weeks = (prefix = "봄"): LessonWeek[] =>
   }));
 const plan = (
   id = "plan-1",
-  term: LessonPlan["term"] = "spring",
+  term: LessonPlan["term"] = "spring"
 ): LessonPlan => ({
   id,
   year: currentYear,
@@ -72,12 +73,15 @@ const renderScreen = () => {
           <LessonPlans />
         </MemoryRouter>
       </ThemeProvider>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
 };
 
 describe("LessonPlans", () => {
   beforeEach(() => {
+    jest
+      .spyOn(attendanceWorkspace, "updateLocations")
+      .mockResolvedValue(undefined);
     jest.spyOn(window, "fetch").mockImplementation((input, options) => {
       const url = String(input);
       if (url === "/api/lesson-locations?includeInactive=true") {
@@ -100,20 +104,20 @@ describe("LessonPlans", () => {
     const { container } = renderScreen();
 
     expect(
-      await screen.findByRole("heading", { name: "봄학기 · 서초 문화센터" }),
+      await screen.findByRole("heading", { name: "봄학기 · 서초 문화센터" })
     ).toBeInTheDocument();
     expect(screen.getByText("봄 1주 수업")).toBeInTheDocument();
     expect(
-      screen.getByText("감각을 깨우는 통합놀이 과정입니다."),
+      screen.getByText("감각을 깨우는 통합놀이 과정입니다.")
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /DOCX 다운로드/ })).toHaveAttribute(
       "href",
-      "/api/lesson-plans/plan-1/docx",
+      "/api/lesson-plans/plan-1/docx"
     );
     expect(container.querySelectorAll(".week-detail-row")).toHaveLength(12);
     expect(screen.getByRole("link", { name: /음악 관리/ })).toHaveAttribute(
       "href",
-      "/",
+      "/"
     );
   });
 
@@ -133,16 +137,19 @@ describe("LessonPlans", () => {
               completedWeeks: 1,
               weeks: (savedBody?.weeks as LessonWeek[]) || [],
             },
-            201,
+            201
           );
         }
         if (url === "/api/lesson-plans") return jsonResponse([]);
         return jsonResponse([]);
-      },
+      }
     );
     renderScreen();
 
-    await screen.findByRole("button", { name: /신규 등록/ });
+    fireEvent.click(screen.getByRole("button", { name: "계획서 관리" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /신규 등록/ })).toBeEnabled()
+    );
     fireEvent.click(screen.getByRole("button", { name: /신규 등록/ }));
     fireEvent.change(screen.getByLabelText("1주차 수업명"), {
       target: { value: "첫 만남" },
@@ -172,10 +179,11 @@ describe("LessonPlans", () => {
     renderScreen();
 
     await screen.findByRole("heading", { name: "봄학기 · 서초 문화센터" });
+    fireEvent.click(screen.getByRole("button", { name: "계획서 관리" }));
     fireEvent.click(screen.getByRole("button", { name: /전체 복사/ }));
 
     expect(
-      screen.getByRole("heading", { name: "전체 복사본 등록" }),
+      screen.getByRole("heading", { name: "전체 복사본 등록" })
     ).toBeInTheDocument();
     expect(screen.getByLabelText("1주차 수업명")).toHaveValue("봄 1주 수업");
     fireEvent.change(screen.getByLabelText("계획서 학기"), {
@@ -226,19 +234,18 @@ describe("LessonPlans", () => {
     renderScreen();
 
     await screen.findByRole("heading", { name: "봄학기 · 서초 문화센터" });
+    fireEvent.click(screen.getByRole("button", { name: "계획서 관리" }));
     fireEvent.click(screen.getByRole("button", { name: /수정/ }));
     fireEvent.change(screen.getByLabelText("계획서 공통 수업노트"), {
       target: { value: "curriculum-1" },
     });
 
     await waitFor(() =>
-      expect(screen.getByLabelText("1주차 수업명")).toHaveValue(
-        "공통 1주 수업",
-      ),
+      expect(screen.getByLabelText("1주차 수업명")).toHaveValue("공통 1주 수업")
     );
     expect(screen.getByLabelText("1주차 수업명")).toBeDisabled();
     expect(
-      screen.getByText(/수업명과 수업내용은 연결된 공통 수업노트에서 관리/),
+      screen.getByText(/수업명과 수업내용은 연결된 공통 수업노트에서 관리/)
     ).toBeInTheDocument();
   });
 
@@ -251,26 +258,28 @@ describe("LessonPlans", () => {
           createdName = JSON.parse(String(options.body)).name;
           return jsonResponse(
             { ...location, id: "location-2", name: createdName },
-            201,
+            201
           );
         }
         if (url === "/api/lesson-locations?includeInactive=true")
           return jsonResponse([location]);
         if (url === "/api/lesson-plans") return jsonResponse([]);
         return jsonResponse([]);
-      },
+      }
     );
     renderScreen();
 
-    fireEvent.click(await screen.findByRole("button", { name: /장소 관리/ }));
-    fireEvent.change(screen.getByLabelText("새 장소 이름"), {
+    fireEvent.click(screen.getByRole("button", { name: "계획서 관리" }));
+    fireEvent.click(screen.getByRole("button", { name: "공통 센터 관리" }));
+    await screen.findByLabelText("새 센터 이름");
+    fireEvent.change(screen.getByLabelText("새 센터 이름"), {
       target: { value: "마포 배움터" },
     });
     fireEvent.click(screen.getByRole("button", { name: "등록" }));
 
     await waitFor(() => expect(createdName).toBe("마포 배움터"));
     expect(
-      await screen.findByText("‘마포 배움터’ 장소를 등록했습니다."),
+      await screen.findByText("‘마포 배움터’ 센터를 등록했습니다.")
     ).toBeInTheDocument();
   });
 
@@ -294,11 +303,12 @@ describe("LessonPlans", () => {
     renderScreen();
 
     await screen.findByRole("heading", { name: "봄학기 · 서초 문화센터" });
+    fireEvent.click(screen.getByRole("button", { name: "계획서 관리" }));
     fireEvent.click(screen.getByRole("button", { name: /수정/ }));
     fireEvent.click(screen.getByRole("button", { name: /주차 가져오기/ }));
     await screen.findByRole("heading", { name: "특정 주차 가져오기" });
     fireEvent.click(
-      await screen.findByRole("checkbox", { name: /1주차 여름 1주 수업/ }),
+      await screen.findByRole("checkbox", { name: /1주차 여름 1주 수업/ })
     );
     fireEvent.change(screen.getByLabelText("1주차 대상 주차"), {
       target: { value: "2" },
@@ -306,20 +316,53 @@ describe("LessonPlans", () => {
     fireEvent.click(screen.getByRole("button", { name: "선택 주차 가져오기" }));
 
     expect(window.confirm).toHaveBeenCalledWith(
-      "2주차의 기존 내용을 덮어쓸까요?",
+      "2주차의 기존 내용을 덮어쓸까요?"
     );
     expect(screen.getByLabelText("2주차 수업명")).toHaveValue("여름 1주 수업");
     expect(screen.getByLabelText("2주차 수업내용")).toHaveValue(
-      "여름 1주 내용",
+      "여름 1주 내용"
     );
     expect(screen.getByLabelText("1주차 수업명")).toHaveValue("봄 1주 수업");
   });
   it("does not show an empty plan list when the network request fails", async () => {
-    (window.fetch as jest.Mock).mockRejectedValue(new TypeError('Failed to fetch'));
+    (window.fetch as jest.Mock).mockRejectedValue(
+      new TypeError("Failed to fetch")
+    );
     renderScreen();
-    expect(await screen.findByText('서버에 연결하지 못했습니다. 연결 상태를 확인하고 다시 시도하세요.')).toBeInTheDocument();
-    expect(screen.queryByText('조건에 맞는 계획서가 없습니다.')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', {name:'다시 시도'})).toBeEnabled();
+    expect(
+      await screen.findByText(
+        "서버에 연결하지 못했습니다. 연결 상태를 확인하고 다시 시도하세요."
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("조건에 맞는 계획서가 없습니다.")
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "다시 시도" })).toBeEnabled();
   });
 
+  it("preserves a plan draft through center management and confirms dismissal only for changes", async () => {
+    const confirm = jest.spyOn(window, "confirm").mockReturnValue(false);
+    renderScreen();
+    await screen.findByRole("heading", { name: "봄학기 · 서초 문화센터" });
+    fireEvent.click(screen.getByRole("button", { name: "계획서 관리" }));
+    fireEvent.click(screen.getByRole("button", { name: "수정", exact: true }));
+    fireEvent.change(screen.getByLabelText("1주차 수업명"), {
+      target: { value: "모달 전환 중 보존" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "공통 센터 관리" }));
+    await screen.findByLabelText("새 센터 이름");
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "센터 관리 돌아가기" }));
+    expect(screen.getByLabelText("1주차 수업명")).toHaveValue(
+      "모달 전환 중 보존"
+    );
+    fireEvent.click(screen.getByRole("button", { name: "계획서 관리 닫기" }));
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("1주차 수업명")).toHaveValue(
+      "모달 전환 중 보존"
+    );
+    confirm.mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: "계획서 관리 닫기" }));
+    expect(screen.queryByLabelText("1주차 수업명")).not.toBeInTheDocument();
+  });
 });
