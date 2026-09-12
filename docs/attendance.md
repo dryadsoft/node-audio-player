@@ -92,3 +92,12 @@ v8 서버를 시작하기 전에 기존 DB·사진·배포 파일을 백업하�
 - 전체화면 및 모의 터치 250% 확대에서 종이 SVG와 필기 canvas의 위치·크기가 일치했습니다. 820×1180 및 390×844 iframe viewport에서도 같은 정렬을 유지하고 문서 가로 넘침이 없었습니다. 모의 터치는 테스트 동안 pointer capture를 대체했으며 실제 터치·Pencil 검증은 아닙니다.
 - 기존 PWA 캐시에서는 이전 화면이 먼저 열릴 수 있습니다. 미리보기의 문서화된 `?reauth=1` 경로로 새 번들을 확인했으며, 기존 IndexedDB 기록을 삭제하지 않았습니다. 오프라인 재실행에서도 줄노트가 복원됐습니다.
 - 실제 iPad/Android 기기의 Pencil·터치와 설치 앱, 운영 서버 배포·마이그레이션은 이번 검증에 포함하지 않았습니다.
+
+## 2026-09-12 줄노트 운영 배포 기록
+
+- 기능 커밋 `39380331e2a7366244bcd9ecf2394e069e4f7fc7`을 `origin/master`에 푸시하고 Raspberry Pi에 배포했습니다. 릴리스는 `/home/pi/releases/node-audio-player-3938033`입니다.
+- Node.js 22.23.2에서 Pi 서버 `npm run build`, `npm test -- --runInBand`(51개), `npm run test:e2e -- --runInBand`(10개)가 통과했습니다. 로컬 클라이언트 production 빌드를 배포했습니다.
+- 백업은 `/home/pi/backups/node-audio-player-3938033-20260912T031539Z`에 있습니다. `source.tar.gz`, PM2 설정, 사전 DB·사진 백업, 서비스 정지 후 최종 DB·사진 백업을 보관했습니다. 사용자 음원은 변경하지 않았습니다.
+- 복제 DB에서 v8 마이그레이션을 먼저 검증한 후 운영 DB를 전환했습니다. 기존 9개 테이블의 모든 기존 열·행이 최종 백업과 일치했고, SQLite integrity/FK 검사와 schema 8 확인이 통과했습니다. 기존 사진 1개의 백업·운영 파일 해시도 일치했습니다.
+- 배포 직후 릴리스와 운영 파일 282개의 해시가 일치했습니다. 내부 HTTP에서 `/attendance`, manifest의 모든 자산, service worker가 200으로 응답하고 릴리스 파일과 일치했습니다. 출석부 snapshot API 200 및 기존 페이지의 `pageType`, 인코딩된 음원 경로의 Range 206·응답 바이트를 검증했습니다. PM2 `nmp`는 online이며 재시작 반복은 없습니다.
+- 공개 URL은 curl 요청에서 Cloudflare Access 로그인으로 302 리다이렉트됐습니다. 별도 Python 기본 요청은 403이었으며, 로그인 후 운영 UI·실제 iPad/Pencil·설치 PWA 사용은 검증하지 않았습니다. 새 화면이 보이지 않으면 기존 기록을 지우지 말고 `/attendance?reauth=1`로 접속합니다.
