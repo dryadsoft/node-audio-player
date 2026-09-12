@@ -35,4 +35,18 @@ Node.js 22.23.2에서 실행했다.
 
 브라우저 확인은 임시 DB를 사용하는 `client/scripts/attendance-preview.mjs`로 수행했다. 운영 데이터는 변경하지 않았다. 미리보기 실행 중 build 폴더를 교체하면 파일 읽기 경쟁으로 미리보기 서버가 종료될 수 있어, 최종 빌드는 서버를 중지한 뒤 실행했다. 초기 센터 자동 선택 보완은 최종 회귀 테스트로 검증했다.
 
-실제 iPad/Pencil, 설치된 PWA와 인증된 운영 화면은 미검증이다. 이번 변경의 커밋·푸시·운영 배포는 수행하지 않았다.
+실제 iPad/Pencil, 설치된 PWA와 인증된 운영 화면은 미검증이다. 승인 후 운영 배포 결과는 아래와 같다.
+
+
+## Pi 운영 배포
+
+- 기능 커밋 `58d24ff`를 `origin/master`에 푸시하고 클라이언트 빌드 ID `58d24ff-management`로 배포했다. 커밋 후 배포용 빌드도 통과했다.
+- 릴리스: `/home/pi/releases/node-audio-player-58d24ff-management`.
+- 백업: `/home/pi/backups/node-audio-player-58d24ff-management`. 기존 클라이언트 코드·빌드·문서의 `client-before.tar.gz`와 SQLite 스냅샷·참조 사진의 `data/`를 보관했다. 백업 무결성과 `manifest.json`의 완료 상태를 확인했다.
+- 배포 전 운영 소스 127개가 이전 Git 기준과 일치했다. 배포 후 클라이언트 소스·빌드·문서 111개가 릴리스 SHA-256과 일치했다.
+- 해시가 붙은 정적 파일을 먼저 설치하고 진입 문서·서비스 워커·버전 파일은 파일별 원자적 교체로 반영했다. 기존 정적 파일은 열린 클라이언트를 위해 보존했다. 백엔드·DB 스키마·음원은 변경하지 않았고 서비스 재시작도 하지 않았다.
+- Nginx 8080에서 세 화면, 서비스 워커, 버전 파일이 HTTP 200이며 배포 파일과 일치했다. asset manifest의 정적 파일 6개도 HTTP 내용과 디스크 내용이 일치했다.
+- NestJS 4000과 Nginx 8080에서 playlist·센터·공통 원본·계획서·출석부 snapshot API 총 10건이 HTTP 200과 유효 JSON을 반환했다. 출석부 검증 쿼리는 `year=2026&term=fall`이다. 화면 경로는 Nginx가 제공하며 NestJS 직접 화면 요청의 404는 기존 구성이다.
+- 실제 음원의 Range 응답은 HTTP 206이며 요청한 32바이트가 원본과 일치했다. DB `integrity_check=ok`, 외래 키 오류 0건이다.
+- PM2 `nmp`는 online, 재시작 횟수 0을 유지했다. Nginx·Cloudflare Tunnel은 active이며 공개 `/attendance`의 미인증 요청은 HTTP 302다.
+- 인증된 운영 UI, 설치된 PWA의 새 버전 수신, 실제 iPad/Pencil은 별도 기기 검증이 필요하다.
