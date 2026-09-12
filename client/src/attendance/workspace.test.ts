@@ -577,3 +577,33 @@ it("retains a local note when its id is already used by a remote photo", async (
   expect(record.error).toContain("식별자");
   expect(f.remote.get(id)!.pageType).toBe("photo");
 });
+
+
+it.each(["local", "server"] as const)("resolves an offline erased family to %s after further erasing and restarting", async (side) => {
+  const f = fixture();
+  f.remote.get("one")!.inkDocument = ink(stroke("original"));
+  await ready(f);
+  f.offline(true);
+  const fragments = [
+    { ...stroke("original", 0.1), sourceStrokeId: "original" },
+    { ...stroke("fragment", 0.8), sourceStrokeId: "original" },
+  ];
+  await edit(f.ws, "one", ink(...fragments));
+  const reopened = new AttendanceWorkspace(f.store);
+  await reopened.hydrate();
+  expect(reopened.getSnapshot().pages.find(p => p.id === "one")!.local.inkDocument.strokes).toEqual(fragments);
+  f.remote.set("one", { ...f.remote.get("one")!, revision: 2, inkDocument: ink() });
+  f.offline(false);
+  await reopened.sync();
+  const again = new AttendanceWorkspace(f.store);
+  await again.hydrate();
+  const record = again.getSnapshot().pages.find(p => p.id === "one")!;
+  expect(record.conflicts).toHaveLength(1);
+  expect(record.conflicts[0].id).toBe("original");
+  await edit(again, "one", ink(fragments[1]));
+  await again.resolve("one", "original", side);
+  await again.sync();
+  const expected = side === "local" ? fragments.slice(1) : [];
+  expect(again.getSnapshot().pages.find(p => p.id === "one")!.local.inkDocument.strokes).toEqual(expected);
+  expect(f.remote.get("one")!.inkDocument.strokes).toEqual(expected);
+});

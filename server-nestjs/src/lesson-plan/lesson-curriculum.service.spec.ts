@@ -411,4 +411,24 @@ describe('LessonCurriculumService', () => {
     }
     expect(() => curricula.get(curriculum.id)).toThrow();
   });
+  it('preserves partial eraser lineage across a database round trip and rejects invalid lineage', () => {
+    const curriculum = curricula.create({ year: 2026, term: 'fall', programName: '부분 지우개' });
+    const ink = {
+      version: 2, pageCount: 2, aspectRatio: 4 / 3,
+      strokes: ['original', 'fragment'].map((id, i) => ({
+        id, sourceStrokeId: 'original', page: 0, color: '#111827', width: 4,
+        points: [[i * 0.6, 0.5, 0.5, 0], [i * 0.6 + 0.3, 0.5, 0.5, 1]],
+      })),
+    };
+    curricula.updateWeek(curriculum.id, 1, { className: '', content: '', inkDocument: ink, expectedRevision: 1 });
+    expect(curricula.getWeek(curriculum.id, 1).inkDocument).toEqual(ink);
+    for (const sourceStrokeId of ['', 2, null, {}]) {
+      expect(() => curricula.updateWeek(curriculum.id, 1, {
+        className: '', content: '', expectedRevision: 2,
+        inkDocument: { ...ink, strokes: [{ ...ink.strokes[0], sourceStrokeId }] },
+      })).toThrow(BadRequestException);
+    }
+    expect(curricula.getWeek(curriculum.id, 1).inkDocument).toEqual(ink);
+  });
+
 });

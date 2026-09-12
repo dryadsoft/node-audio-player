@@ -1,3 +1,4 @@
+import { replaceStrokeGroup, strokeGroupChoice, StrokeChoice } from "../api/inkStrokeGroups";
 import { api, ApiError } from "../api";
 import {
   equal,
@@ -6,7 +7,6 @@ import {
   normalizeInk,
 } from "../api/mergeLessonNote";
 import {
-  InkStrokeV2,
   LessonCurriculum,
   LessonCurriculumSummary,
   LessonCurriculumWeek,
@@ -274,15 +274,13 @@ export class NoteWorkspace {
         const result = sameNote(current.local, ancestor)
           ? { merged: local, conflicts: [] }
           : mergeLessonNote(ancestor, local, current.local);
-        const conflicts = new Map(
+        const conflicts = new Map<string, NoteConflict>(
           current.conflicts.map((c) => [
             c.id,
             {
               ...c,
               local: c.id.startsWith("stroke:")
-                ? normalizeInk(result.merged.inkDocument).strokes.find(
-                    (stroke) => stroke.id === c.id.slice(7)
-                  )
+                ? strokeGroupChoice(normalizeInk(result.merged.inkDocument).strokes, c.id.slice(7))
                 : result.merged[c.id as "className" | "content"],
             },
           ])
@@ -351,10 +349,7 @@ export class NoteWorkspace {
           const ink = normalizeInk(local.inkDocument);
           local.inkDocument = {
             ...ink,
-            strokes: [
-              ...ink.strokes.filter((s) => s.id !== conflict.id.slice(7)),
-              ...(value ? [value as InkStrokeV2] : []),
-            ],
+            strokes: replaceStrokeGroup(ink.strokes, conflict.id.slice(7), value as StrokeChoice),
           };
         } else
           local[conflict.id as "className" | "content"] =

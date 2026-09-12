@@ -1,3 +1,4 @@
+import { replaceStrokeGroup, strokeGroupChoice } from "../api/inkStrokeGroups";
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { InkDocumentV2 } from "../types";
@@ -283,7 +284,7 @@ export class AttendanceWorkspace {
               conflicts: [
                 ...record.conflicts.filter(
                   (c) => !merged.conflicts.some((n) => n.id === c.id)
-                ),
+                ).map(c => ({ ...c, local: strokeGroupChoice(merged.ink.strokes, c.id) })),
                 ...merged.conflicts,
               ],
               error: undefined,
@@ -344,10 +345,7 @@ export class AttendanceWorkspace {
         if (!r) return;
         const c = r.conflicts.find((c) => c.id === conflictId);
         if (!c) return r;
-        const strokes = r.local.inkDocument.strokes.filter(
-          (s) => s.id !== c.id
-        );
-        if (c[side]) strokes.push(c[side]!);
+        const strokes = replaceStrokeGroup(r.local.inkDocument.strokes, c.id, c[side]);
         return {
           ...r,
           local: {

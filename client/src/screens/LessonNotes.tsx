@@ -1,3 +1,5 @@
+import InkConflictPreview from "../components/InkConflictPreview";
+import { StrokeChoice } from "../api/inkStrokeGroups";
 import { usePwaUpdateGuard } from "../offline/updateGuard";
 import StatusDialog from "../components/StatusDialog";
 import RecoveredInk from "../components/RecoveredInk";
@@ -397,7 +399,7 @@ function LessonNotes() {
                     {sync.conflicts.map(conflict => <div key={conflict.id} className="note-conflict">
                       <b>{conflict.label}</b>
                       {(["local", "server"] as const).map(side => <div key={side}>
-                        {typeof conflict[side] === "string" ? <pre>{conflict[side] as string || "(빈 내용)"}</pre> : conflict[side] ? <svg viewBox="0 0 1 1" aria-label={`${side === "local" ? "이 장비" : "서버"} 필기 미리보기`}><polyline fill="none" stroke="currentColor" strokeWidth="0.005" points={(conflict[side] as import("../types").InkStrokeV2).points.map(p => `${p[0]},${p[1]}`).join(" ")} /></svg> : <p>삭제된 획</p>}
+                        {typeof conflict[side] === "string" ? <pre>{conflict[side] as string || "(빈 내용)"}</pre> : <InkConflictPreview value={conflict[side] as StrokeChoice} label={`${side === "local" ? "이 장비" : "서버"} 필기 미리보기`} />}
                         <button className="button secondary" onClick={() => sync.resolve(conflict, side)}>{side === "local" ? "이 장비 내용" : "서버 내용"}</button>
                       </div>)}
                     </div>)}

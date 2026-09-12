@@ -386,4 +386,21 @@ describe('Attendance persistence', () => {
       BadRequestException,
     );
   });
+  it('round-trips erased fragments without losing their original stroke identity', async () => {
+    const p = await upload();
+    const ink = { ...p.inkDocument, strokes: ['original', 'fragment'].map((id, i) => ({
+      id, sourceStrokeId: 'original', page: 0, color: '#111827', width: 4,
+      points: [[i * 0.6, 0.5, 0.5, 0], [i * 0.6 + 0.3, 0.5, 0.5, 1]],
+    })) };
+    service.updatePage(p.id, { expectedRevision: 1, inkDocument: ink });
+    expect(service.getPage(p.id).inkDocument).toEqual(ink);
+    for (const sourceStrokeId of ['', 2, null, {}, 'a'.repeat(151)]) {
+      expect(() => service.updatePage(p.id, {
+        expectedRevision: 2,
+        inkDocument: { ...ink, strokes: [{ ...ink.strokes[0], sourceStrokeId }] },
+      })).toThrow(BadRequestException);
+    }
+    expect(service.getPage(p.id).inkDocument).toEqual(ink);
+  });
+
 });

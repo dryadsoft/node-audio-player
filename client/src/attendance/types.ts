@@ -1,9 +1,10 @@
+import { mergeStrokeGroups, StrokeChoice } from "../api/inkStrokeGroups";
 import {
   InkDocumentV2,
-  InkStrokeV2,
   LessonLocation,
   LessonTerm,
 } from "../types";
+export { equal } from "../api/inkStrokeGroups";
 export interface Term {
   year: number;
   term: LessonTerm;
@@ -70,8 +71,8 @@ export function isPeriodDeleted(
 }
 export interface Conflict {
   id: string;
-  local?: InkStrokeV2;
-  server?: InkStrokeV2;
+  local?: StrokeChoice;
+  server?: StrokeChoice;
 }
 export interface RecordPage {
   id: string;
@@ -90,34 +91,11 @@ export interface SavedCatalog extends Catalog {
   semester: Term;
   locations: LessonLocation[];
 }
-export const equal = (a: unknown, b: unknown) =>
-  JSON.stringify(a) === JSON.stringify(b);
 export function mergeInk(
   base: InkDocumentV2 | undefined,
   local: InkDocumentV2,
   remote: InkDocumentV2
 ) {
-  const b = new Map(base?.strokes.map((s) => [s.id, s])),
-    l = new Map(local.strokes.map((s) => [s.id, s])),
-    r = new Map(remote.strokes.map((s) => [s.id, s]));
-  const strokes: InkStrokeV2[] = [],
-    conflicts: Conflict[] = [];
-  Array.from(
-    new Set([
-      ...Array.from(b.keys()),
-      ...Array.from(l.keys()),
-      ...Array.from(r.keys()),
-    ])
-  ).forEach((id) => {
-    const bs = b.get(id),
-      ls = l.get(id),
-      rs = r.get(id);
-    let chosen = ls;
-    if (equal(ls, rs)) chosen = ls;
-    else if (equal(ls, bs)) chosen = rs;
-    else if (equal(rs, bs)) chosen = ls;
-    else conflicts.push({ id, local: ls, server: rs });
-    if (chosen) strokes.push(chosen);
-  });
+  const { strokes, conflicts } = mergeStrokeGroups(base?.strokes, local.strokes, remote.strokes, false);
   return { ink: { ...remote, strokes }, conflicts };
 }

@@ -1,6 +1,7 @@
+import { InkStrokeV2 } from "../types";
 import { fixture, clone, note } from "../testSupport/noteFixture";
 import { api, ApiError } from "../api";
-import { NoteWorkspace } from "./noteWorkspace";
+import { NoteWorkspace, sameNote } from "./noteWorkspace";
 import { NoteStore } from "./noteStore";
 
 beforeEach(() => {
@@ -403,4 +404,47 @@ it("recovers a rejected PWA draft and merges independently stored Safari ink", a
   }
   const reopened = new NoteWorkspace(safari.store); await reopened.hydrate();
   expect(reopened.getSnapshot().notes[0].local.inkDocument.strokes).toHaveLength(2);
+});
+
+
+it.each(["local", "server"] as const)("restores offline fragments and resolves the whole original stroke to %s after further erasing", async (side) => {
+  const f = fixture();
+  const original: InkStrokeV2 = { id: "original", page: 0, color: "#111827", width: 4, points: [[0, 0.5, 0.5, 0], [1, 0.5, 0.5, 1]] };
+  const ink = (strokes: InkStrokeV2[]) => ({ version: 2 as const, pageCount: 2, aspectRatio: 4 / 3, strokes });
+  f.editRemote("c1", 1, { inkDocument: ink([original]) });
+  await f.workspace.refresh();
+  Object.defineProperty(navigator, "onLine", { value: false });
+  const local = [
+    { ...original, sourceStrokeId: "original", points: [[0, 0.5, 0.5, 0], [0.4, 0.5, 0.5, 0.4]] } as InkStrokeV2,
+    { ...original, id: "fragment", sourceStrokeId: "original", points: [[0.6, 0.5, 0.5, 0.6], [1, 0.5, 0.5, 1]] } as InkStrokeV2,
+  ];
+  await f.edit("c1:1", { inkDocument: ink(local) });
+  const reopened = new NoteWorkspace(f.store);
+  await reopened.hydrate();
+  expect(reopened.getSnapshot().notes.find(n => n.key === "c1:1")!.local.inkDocument.strokes).toEqual(local);
+  f.editRemote("c1", 1, { inkDocument: ink([]) });
+  Object.defineProperty(navigator, "onLine", { value: true });
+  await reopened.refresh();
+  const conflicted = new NoteWorkspace(f.store);
+  await conflicted.hydrate();
+  const record = conflicted.getSnapshot().notes.find(n => n.key === "c1:1")!;
+  expect(record.conflicts).toHaveLength(1);
+  expect(record.conflicts[0].id).toBe("stroke:original");
+  await f.edit(record.key, { inkDocument: ink(local.slice(1)) }, conflicted);
+  const latestConflict = conflicted.getSnapshot().notes.find(n => n.key === record.key)!.conflicts[0];
+  await conflicted.resolve(record.key, latestConflict, side);
+  await f.store.change(record.key, n => n && { ...n, changedAt: 0 });
+  await conflicted.reload();
+  await conflicted.refresh();
+  const expected = side === "local" ? local.slice(1) : [];
+  expect(conflicted.getSnapshot().notes.find(n => n.key === record.key)!.local.inkDocument.strokes).toEqual(expected);
+  expect(f.data.get("c1")!.weeks[0].inkDocument.strokes).toEqual(expected);
+});
+
+
+it("treats a reordered API eraser acknowledgement as the same saved note", () => {
+  const stroke: InkStrokeV2 = { id: "fragment", page: 0, color: "#111827", width: 4, points: [[0.6, 0.5, 0.5, 1]], sourceStrokeId: "original" };
+  const local = { ...note(), inkDocument: { ...note().inkDocument, strokes: [stroke] } };
+  const remote = { ...local, inkDocument: { ...local.inkDocument, strokes: [{ sourceStrokeId: stroke.sourceStrokeId, id: stroke.id, page: stroke.page, points: stroke.points, color: stroke.color, width: stroke.width }] } };
+  expect(sameNote(local, remote)).toBe(true);
 });

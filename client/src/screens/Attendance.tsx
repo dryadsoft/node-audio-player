@@ -1,3 +1,4 @@
+import InkConflictPreview from "../components/InkConflictPreview";
 import { usePwaUpdateGuard } from "../offline/updateGuard";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { InkCanvas, InkNoteBackground } from "@dryadsoft/react-ink-canvas";
@@ -494,6 +495,7 @@ export default function Attendance() {
                   backgroundImage={isNote ? undefined : photo}
                   fixedPage
                   compactTools
+                  inkLimits={{ maxBytes: 1024 * 1024 }}
                   touchBehavior={touchDraw ? "draw" : "pan-zoom"}
                   className="attendance-ink"
                   historyResetKey={record.historyKey || 0}
@@ -528,20 +530,7 @@ export default function Attendance() {
                         }
                       >
                         {side === "local" ? "이 기기" : "서버"}
-                        {c[side] ? (
-                          <svg viewBox="0 0 1 1">
-                            <polyline
-                              points={c[side]!.points.map(
-                                (p) => `${p[0]},${p[1]}`
-                              ).join(" ")}
-                              stroke={c[side]!.color}
-                              strokeWidth=".01"
-                              fill="none"
-                            />
-                          </svg>
-                        ) : (
-                          " · 삭제"
-                        )}
+                        <InkConflictPreview value={c[side]} />
                       </button>
                     ))}
                   </div>

@@ -569,6 +569,8 @@ export class LessonCurriculumService {
       if (
         typeof stroke.id !== 'string' ||
         !stroke.id ||
+        (stroke.sourceStrokeId !== undefined &&
+          (typeof stroke.sourceStrokeId !== 'string' || !stroke.sourceStrokeId)) ||
         !INK_COLORS.has(String(stroke.color)) ||
         !INK_WIDTHS.has(Number(stroke.width)) ||
         !Number.isInteger(page) ||
@@ -586,6 +588,9 @@ export class LessonCurriculumService {
       const points = stroke.points.map((point) => this.validatePoint(point));
       strokes.push({
         id: stroke.id,
+        ...(stroke.sourceStrokeId !== undefined
+          ? { sourceStrokeId: stroke.sourceStrokeId as string }
+          : {}),
         page,
         color: stroke.color as InkStrokeV2['color'],
         width: Number(stroke.width) as InkStrokeV2['width'],

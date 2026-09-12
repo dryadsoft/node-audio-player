@@ -17,6 +17,7 @@ export interface InkDocumentV1 {
 
 export interface InkStrokeV2 extends InkStroke {
   page: number;
+  sourceStrokeId?: string;
 }
 
 export interface InkDocumentV2 {

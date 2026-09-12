@@ -1,11 +1,10 @@
+import { equal, mergeStrokeGroups, StrokeChoice } from "./inkStrokeGroups";
 import {
   InkDocument,
   InkDocumentV2,
-  InkStrokeV2,
   LessonCurriculumWeek,
 } from "../types";
-export const equal = (a: unknown, b: unknown) =>
-  JSON.stringify(a) === JSON.stringify(b);
+export { equal } from "./inkStrokeGroups";
 export const normalizeInk = (ink: InkDocument): InkDocumentV2 =>
   ink.version === 2
     ? ink
@@ -18,8 +17,8 @@ export const normalizeInk = (ink: InkDocument): InkDocumentV2 =>
 export interface NoteConflict {
   id: string;
   label: string;
-  local: string | InkStrokeV2 | undefined;
-  server: string | InkStrokeV2 | undefined;
+  local: string | StrokeChoice;
+  server: string | StrokeChoice;
 }
 export function mergeLessonNote(
   base: LessonCurriculumWeek | undefined,
@@ -48,26 +47,8 @@ export function mergeLessonNote(
   const bi = base && normalizeInk(base.inkDocument),
     li = normalizeInk(local.inkDocument),
     ri = normalizeInk(server.inkDocument);
-  const bm = new Map(bi?.strokes.map((s) => [s.id, s])),
-    lm = new Map(li.strokes.map((s) => [s.id, s])),
-    rm = new Map(ri.strokes.map((s) => [s.id, s]));
-  const strokes: InkStrokeV2[] = [];
-  Array.from(
-    new Set([
-      ...Array.from(bm.keys()),
-      ...Array.from(lm.keys()),
-      ...Array.from(rm.keys()),
-    ])
-  ).forEach((id) => {
-    const stroke = choose(
-      `stroke:${id}`,
-      "필기 획",
-      bm.get(id),
-      lm.get(id),
-      rm.get(id)
-    );
-    if (stroke) strokes.push(stroke);
-  });
+  const { strokes, conflicts: inkConflicts } = mergeStrokeGroups(bi?.strokes, li.strokes, ri.strokes);
+  conflicts.push(...inkConflicts.map(c => ({ ...c, id: `stroke:${c.id}`, label: "필기 획" })));
   const merged = {
     ...server,
     className:

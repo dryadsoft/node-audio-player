@@ -84,6 +84,10 @@ export function validateInk(v: any, ratio: number) {
       typeof s.id !== 'string' ||
       !s.id ||
       s.id.length > 150 ||
+      (s.sourceStrokeId !== undefined &&
+        (typeof s.sourceStrokeId !== 'string' ||
+          !s.sourceStrokeId ||
+          s.sourceStrokeId.length > 150)) ||
       ids.has(s.id) ||
       s.page !== 0 ||
       !/^#[0-9a-f]{6}$/i.test(s.color) ||
@@ -111,6 +115,9 @@ export function validateInk(v: any, ratio: number) {
         invalid('필기 좌표가 올바르지 않습니다.');
     return {
       id: s.id,
+      ...(s.sourceStrokeId !== undefined
+        ? { sourceStrokeId: s.sourceStrokeId }
+        : {}),
       page: 0,
       color: s.color,
       width: s.width,
