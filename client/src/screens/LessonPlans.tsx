@@ -1,3 +1,4 @@
+import { usePwaUpdateGuard } from "../offline/updateGuard";
 import RequestFailure from "../components/RequestFailure";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
@@ -103,6 +104,7 @@ function LessonPlans() {
   const [copySourceId, setCopySourceId] = useState("");
   const [weekMappings, setWeekMappings] = useState<WeekMapping[]>([]);
   const [notice, setNotice] = useState<Notice>();
+  usePwaUpdateGuard(editor || locationDialogOpen || copyDialogOpen ? "계획서 입력을 저장하거나 편집 창을 닫은 뒤 적용해 주세요." : "");
 
   const locationsQuery = useQuery<LessonLocation[]>(
     "lessonLocations",

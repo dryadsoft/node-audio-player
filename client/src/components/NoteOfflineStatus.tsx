@@ -84,8 +84,7 @@ export default function NoteOfflineStatus() {
         ) : null}
         {pwa === "update" ? (
           <p>
-            새 버전이 준비됐습니다. 입력 저장 후 앱과 같은 사이트의 탭을 모두
-            닫고 다시 열면 적용됩니다.
+            새 버전이 준비됐습니다. 화면의 ‘새 버전 적용’ 버튼으로 업데이트할 수 있습니다.
           </p>
         ) : null}
         <div className="note-offline-actions">

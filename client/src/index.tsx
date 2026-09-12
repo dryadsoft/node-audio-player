@@ -10,11 +10,17 @@ import { QueryClient, QueryClientProvider } from "react-query";
 const queryClient = new QueryClient();
 const root = ReactDOM.createRoot(document.getElementById("root")!);
 root.render(
-  <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <App />
-    </QueryClientProvider>
-  </React.StrictMode>
+  <div role="status" style={{ padding: 24 }}>
+    새 버전을 확인하고 있습니다…
+  </div>
 );
-
-void registerPwa();
+void registerPwa().then((reloading) => {
+  if (reloading) return;
+  root.render(
+    <React.StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    </React.StrictMode>
+  );
+});

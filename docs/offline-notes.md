@@ -27,7 +27,7 @@
 - 충돌은 기존 텍스트/획 단위 병합과 선택 UI를 사용합니다. 한글 조합과 필기 중 원격 내용 적용을 미룹니다. 원격 삭제 시 미전송 내용은 읽기 전용 복구 노트로 남깁니다.
 - 기존 API와 서버 SQLite 스키마는 그대로 사용합니다. JSON이 아닌 로그인 응답이나 리디렉션을 데이터로 저장하지 않습니다.
 - production 빌드에서만 서비스 워커를 등록합니다. Workbox는 앱 정적 자산을 precache하며 API·음악·인증 경로는 캐시하지 않습니다. `/lesson-notes?reauth=1`은 캐시를 우회합니다.
-- 새 서비스 워커는 열린 앱을 강제로 새로고침하지 않습니다. 기존 탭을 모두 닫은 뒤 활성화됩니다. 잘못된 자산 응답은 새 버전 설치를 실패시키고 기존 캐시를 유지합니다.
+- 새 서비스 워커는 열린 앱을 강제로 새로고침하지 않습니다. 접속·새로고침 시 적용하고 사용 중에는 업데이트 버튼을 표시합니다. 잘못된 자산 응답은 새 버전 설치를 실패시키고 기존 캐시를 유지합니다. 자세한 동작은 아래 업데이트 절차를 따릅니다.
 - Cloudflare Access가 보호하는 manifest도 로그인 쿠키와 함께 가져오도록 `crossorigin="use-credentials"`를 설정합니다. [MDN manifest 인증 안내](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/crossorigin#web_manifest_with_credentials)
 - 설치 이름은 **음악과 수업노트**, 시작 경로는 `/lesson-notes`입니다. 실제 서비스는 HTTPS가 필요하며 localhost에서는 개발 검증이 가능합니다.
 
@@ -68,3 +68,30 @@ Node.js 22.23.2에서 자동 테스트 61개와 클라이언트 production 빌�
 NestJS도 빌드한 뒤 임시 DB·목록 경로로 실행했습니다. 한글·공백이 포함된 기존 음악 경로의 재생목록은 HTTP 200, 오디오 `Range: bytes=0-31`은 HTTP 206과 원본 32바이트 일치로 확인했습니다. 검증 서버는 종료했고 사용자 음악 파일은 변경하지 않았습니다.
 
 실제 iPad/Android 기기, 설치 앱, 운영 Cloudflare Access 재인증 및 Raspberry Pi 배포는 이 로컬 검증에 포함되지 않습니다.
+
+## 배포 후 화면 업데이트
+
+- 앱 시작·새로고침 시 최대 5초 동안 새 버전을 확인합니다. 설치·활성화가 끝나면 편집 화면을 열기 전에 한 번만 다시 로드합니다. 확인 지연·오프라인·인증 실패 시 기존 화면을 열고 다음 확인 때 재시도합니다.
+- 사용 중인 편집 화면은 자동 재로드하지 않습니다. 화면 복귀·온라인 복구 및 활성 화면의 60초 주기 확인으로 새 버전을 감지하면 공통 `새 버전 적용` 버튼을 표시합니다.
+- 적용 직전 한글 조합·필기·기기 저장·사진 가져오기·관리/계획서 편집 창·진행 중인 API 변경을 확인합니다. 저장 실패나 미저장 입력이 있으면 적용하지 않습니다. IndexedDB에 저장된 서버 미전송 기록은 그대로 유지합니다.
+- `npm run build`는 고유한 `REACT_APP_BUILD_ID`를 HTML·JS·서비스 워커에 넣고 `build/version.json`을 생성합니다. 배포 단위마다 새 ID를 사용하며, 자산을 먼저 복사하고 `index.html`, `service-worker.js` 순서로 원자적으로 교체합니다. HTML과 워커의 빌드 ID가 다르면 설치를 거절합니다.
+- 새 워커는 설치 성공 후 활성화하지만 열린 다른 탭은 재로드하지 않습니다. 버전별 precache와 이전 해시 자산 조회를 유지합니다. 모든 창이 현재 빌드임을 확인한 경우에만 이전 캐시를 정리합니다. 응답하지 않는 기존/중지 탭은 보수적으로 보존하며, 워커가 종료되어 정리 후보를 잊었다면 다음 활성화 때 정리합니다. IndexedDB와 다른 앱의 캐시는 삭제하지 않습니다.
+- Nginx는 HTML·서비스 워커·버전 정보에 `no-cache, must-revalidate`, `/static/`의 해시 자산에 `immutable`을 적용합니다. 이전 해시 자산을 배포 중 삭제하지 않습니다.
+- 이 기능이 없는 기존 앱은 최초 한 번 `?reauth=1` 접속 또는 관련 탭·설치 앱을 모두 종료한 뒤 재접속해야 할 수 있습니다. 브라우저의 사이트 데이터 초기화는 필요하지 않습니다.
+
+### 업데이트 브라우저 검증
+
+클라이언트 전체 테스트 외에 서로 다른 ID로 만든 실제 production 빌드 A/B를 검증합니다. Playwright가 준비된 별도 테스트 환경에서 실행하며 앱 의존성을 추가하지 않습니다.
+
+```sh
+cd client
+REACT_APP_BUILD_ID=acceptance-A npm run build
+cp -R build /tmp/nmp-build-A
+REACT_APP_BUILD_ID=acceptance-B npm run build
+cp -R build /tmp/nmp-build-B
+PLAYWRIGHT_MODULE=/path/to/playwright node scripts/pwa-update-check.mjs /tmp/nmp-build-A /tmp/nmp-build-B
+```
+
+- 잘못된 업데이트 자산 거절, 새로고침 1회 적용, 다른 탭·이전 캐시 유지, 한글 조합·관리 입력 중 적용 차단을 확인합니다.
+- fixture 서버를 실제로 닫고 이전 JS 자산 요청, 오프라인 글·필기 저장 후 업데이트, 오프라인 재실행·재접속 동기화를 확인합니다. 운영 데이터는 사용하지 않습니다.
+- 실제 iPad/Pencil·설치 PWA·로그인한 운영 UI 검증은 별도입니다.

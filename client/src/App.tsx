@@ -1,3 +1,4 @@
+import PwaUpdateNotice from "./components/PwaUpdateNotice";
 import Attendance from "./screens/Attendance";
 import { AttendanceLifecycle } from "./attendance/workspace";
 import { NoteWorkspaceLifecycle } from "./offline/useNoteWorkspace";
@@ -12,6 +13,7 @@ function App() {
     <ThemeProvider>
       <NoteWorkspaceLifecycle />
       <AttendanceLifecycle />
+      <PwaUpdateNotice />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Home />} />

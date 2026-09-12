@@ -2506,3 +2506,31 @@ textarea {
 .request-failure span { flex: 1 1 240px; }
 .request-failure p { flex-basis: 100%; margin: 0; }
 @media (max-width: 560px) { .notes-header .save-indicator { width: 170px; flex-basis: 170px; font-size: .72rem; } }
+
+.pwa-update-notice {
+  position: fixed;
+  z-index: 10000;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(580px, calc(100% - 24px));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 4px 24px rgba(var(--shadow-rgb), .25);
+}
+.pwa-update-notice button {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-weight: 600;
+}
+.pwa-update-notice [role="alert"], .pwa-update-notice details { flex-basis: 100%; }
+.pwa-update-notice details { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }

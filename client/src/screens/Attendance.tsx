@@ -1,3 +1,4 @@
+import { usePwaUpdateGuard } from "../offline/updateGuard";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { InkCanvas, InkNoteBackground } from "@dryadsoft/react-ink-canvas";
 import { Link } from "react-router-dom";
@@ -42,6 +43,9 @@ export default function Attendance() {
     [weekday, setWeekday] = useState(1),
     [periodName, setPeriodName] = useState(""),
     [pwa, setPwa] = useState(pwaState);
+  const [interacting, setInteracting] = useState(false);
+  usePwaUpdateGuard(interacting || file || working || panel
+    ? "필기·사진 가져오기·관리 입력을 마치거나 닫은 뒤 적용해 주세요." : "");
   const chosenInitial = useRef(false),
     camera = useRef<HTMLInputElement>(null),
     picker = useRef<HTMLInputElement>(null);
@@ -493,6 +497,7 @@ export default function Attendance() {
                   touchBehavior={touchDraw ? "draw" : "pan-zoom"}
                   className="attendance-ink"
                   historyResetKey={record.historyKey || 0}
+                  onInteractionChange={setInteracting}
                   onChange={(ink) => workspace.edit(pageId, ink)}
                   labels={{
                     clearConfirm: isNote

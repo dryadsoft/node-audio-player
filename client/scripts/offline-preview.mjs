@@ -3,7 +3,7 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { resolve, extname, sep } from "node:path";
 import { createInterface } from "node:readline";
-const root = resolve(import.meta.dirname, "../build");
+let root = resolve(process.env.NOTE_PREVIEW_BUILD || resolve(import.meta.dirname, "../build"));
 const port = Number(process.env.NOTE_PREVIEW_PORT || 4173);
 let revision = 0,
   auth = false,
@@ -140,9 +140,13 @@ const listen = () =>
   );
 listen();
 console.log(
-  "Commands: offline, online, auth, bad-update, good-update, state, quit"
+  "Commands: build <directory>, offline, online, auth, bad-update, good-update, state, quit"
 );
 createInterface({ input: process.stdin }).on("line", (line) => {
+  if (line.startsWith("build ")) {
+    root = resolve(line.slice(6));
+    console.log("Fixture build changed.");
+  }
   if (line === "offline") {
     server.closeAllConnections();
     server.close(() =>

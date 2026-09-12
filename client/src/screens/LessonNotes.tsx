@@ -1,3 +1,4 @@
+import { usePwaUpdateGuard } from "../offline/updateGuard";
 import StatusDialog from "../components/StatusDialog";
 import RecoveredInk from "../components/RecoveredInk";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -61,6 +62,7 @@ function LessonNotes() {
   const [statusOpen, setStatusOpen] = useState(false);
   const [actionError, setActionError] = useState("");
   const [actionNotice, setActionNotice] = useState("");
+  usePwaUpdateGuard(creating || menuCurriculumId !== null || manageDialog ? "노트 관리 입력을 마치거나 창을 닫은 뒤 적용해 주세요." : "");
   const [checkingDrafts, setCheckingDrafts] = useState(false);
   const activeKey = selectedId
     ? lessonNoteDraftKey(selectedId, selectedWeek)
