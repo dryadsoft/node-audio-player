@@ -49,4 +49,23 @@
 
 `v0.4.1`의 동일 좌표 필압 보존 보완은 재현 테스트 실패 후 수정하여 패키지 테스트 41개로 검증했다.
 
-실제 iPad/Apple Pencil 하드웨어, 운영 서버 및 인증된 운영 UI는 이번 작업에서 검증하지 않았다. Pi 운영 배포는 수행하지 않았다.
+실제 iPad/Apple Pencil 하드웨어와 인증된 운영 UI는 검증하지 않았다. Pi 운영 배포 결과는 아래와 같다.
+
+
+## Pi 운영 배포
+
+2026-09-12, 기능 커밋 `1b622c6`을 `origin/master`에 푸시하고 운영에 반영했다.
+
+- 공용 패키지 `v0.4.1`, 클라이언트 빌드 ID `1b622c6-eraser-v041`.
+- 릴리스: `/home/pi/releases/node-audio-player-1b622c6-eraser`.
+- 백업: `/home/pi/backups/node-audio-player-1b622c6-20260912-eraser`.
+- 운영 소스 111개가 배포 전 Git 기준과 일치함을 확인했다. 코드·기존 빌드·PM2 설정을 보관하고, 서비스 중지 후 DB·참조 사진을 최종 백업했다.
+- Pi 별도 릴리스에서 `npm ci --include=dev --ignore-scripts --no-audit --no-fund`, `npm run build`, `npm test -- --runInBand --no-watchman`(53개), `npm run test:e2e -- --runInBand --no-watchman`(10개)가 통과했다.
+- 서버·클라이언트를 함께 교체하고 PM2 `nmp`를 재시작·저장했다. 운영 소스·빌드 파일 288개가 릴리스와 SHA-256 기준으로 일치했다.
+- 두 포트(4000·8080)에서 playlist·attendance snapshot·lesson curricula API 총 6개가 HTTP 200과 유효 JSON을 반환했다.
+- `/attendance`, `/lesson-notes`, `/service-worker.js`, `/version.json`이 HTTP 200을 반환했다. asset manifest의 6개 파일은 HTTP 응답과 디스크 내용이 일치했다.
+- 실제 음악 파일의 Range 요청은 HTTP 206이며 요청한 32바이트가 원본과 일치했다.
+- DB 스키마는 8을 유지했다. `integrity_check=ok`, 외래 키 오류 0건이며 배포 후 전체 SQL dump가 최종 백업과 일치했다.
+- PM2 `nmp`는 online이며 자동 재시작 증가가 없었다.
+- 로컬과 Pi의 `curl`에서 공개 `/attendance`는 Cloudflare Access로 HTTP 302를 반환했다. Pi Python urllib 요청은 HTTP 403을 반환해 공개 경로 검증은 curl로 별도 확인했다.
+- 인증된 운영 화면, 설치된 PWA의 업데이트 수신, 실제 iPad/Pencil 동작은 별도 기기 확인이 필요하다.
