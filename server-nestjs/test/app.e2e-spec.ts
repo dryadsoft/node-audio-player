@@ -61,6 +61,11 @@ describe('AppController (e2e)', () => {
     await fs.rm(temporaryDirectory, { recursive: true, force: true });
   });
 
+  it('/api/connection (GET) is an uncached origin probe without user data', () => {
+    return request(app.getHttpServer()).get('/api/connection')
+      .expect(200).expect('Cache-Control', 'no-store').expect({ ok: true });
+  });
+
   it('/api (GET)', () => {
     return request(app.getHttpServer()).get('/api').expect(404);
   });

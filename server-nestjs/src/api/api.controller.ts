@@ -1,9 +1,15 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Header, Query } from '@nestjs/common';
 import { ApiService } from './api.service';
 
 @Controller('api')
 export class ApiController {
   constructor(private readonly apiService: ApiService) {}
+  @Get('connection')
+  @Header('Cache-Control', 'no-store')
+  connection() {
+    return { ok: true };
+  }
+
   @Get('playlist')
   playList(@Query('dir') dir: string) {
     return this.apiService.playList(dir);
