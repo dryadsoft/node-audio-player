@@ -18,12 +18,12 @@ afterEach(() => {
   jest.restoreAllMocks();
   jest.useRealTimers();
 });
-it("rejects successful HTML login pages and redirected note responses", async () => {
+it("distinguishes invalid HTML from authentication redirects", async () => {
   const fetch = jest
     .spyOn(window, "fetch")
     .mockResolvedValueOnce(response({}, "text/html"))
     .mockResolvedValueOnce(response([], "application/json", true));
-  await expect(api.lessonCurricula()).rejects.toMatchObject({ status: 401 });
+  await expect(api.lessonCurricula()).rejects.toMatchObject({ kind: "invalid" });
   await expect(api.lessonCurricula()).rejects.toMatchObject({ status: 401 });
   expect(fetch).toHaveBeenCalledTimes(2);
 });
@@ -64,7 +64,7 @@ it("keeps the timeout active until the JSON body finishes", async () => {
 });
 
 it("uses authentication and no-cache protection for music and lesson plans too", async () => {
-  const fetch = jest.spyOn(window, 'fetch').mockResolvedValue(response({}, 'text/html'));
+  const fetch = jest.spyOn(window, 'fetch').mockResolvedValue({ ...response({}, 'text/html'), ok: false, status: 401 });
   await expect(api.playlist({ queryKey: ['library', '한글 폴더'] })).rejects.toMatchObject({ status: 401 });
   await expect(api.lessonPlans()).rejects.toMatchObject({ status: 401 });
   expect(fetch).toHaveBeenCalledWith('/api/lesson-plans', expect.objectContaining({ cache: 'no-store', signal: expect.any(AbortSignal) }));

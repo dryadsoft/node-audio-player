@@ -145,13 +145,16 @@ try {
   await b.getByRole("alert").filter({ hasText: "기기 저장을 마친" }).waitFor();
   assert(await loaded(b, scriptA));
   await title(b).dispatchEvent("compositionend");
+  await b.getByRole("button", { name: "수업노트 관리", exact: true }).click();
   await b.getByRole("button", { name: "새 공통 원본", exact: true }).click();
-  await b.getByRole("button", { name: "새 버전 적용", exact: true }).click();
+  // The management modal covers the banner; invoke its handler to verify the guard.
+  await b.getByRole("button", { name: "새 버전 적용", exact: true }).dispatchEvent("click");
   await b.getByRole("alert").filter({ hasText: "관리 입력" }).waitFor();
   await b
     .locator(".curriculum-create")
     .getByRole("button", { name: "취소", exact: true })
     .click();
+  await b.keyboard.press("Escape");
   console.log("PASS IME composition and open management form block update");
   await command("offline", "Fixture server offline");
   assert.equal(

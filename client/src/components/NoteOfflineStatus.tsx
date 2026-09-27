@@ -1,3 +1,5 @@
+import { connection as connectionMonitor } from "../api/connection";
+import { requestReauthentication } from "../offline/authRecovery";
 import { useEffect, useState } from "react";
 import StatusDialog from "./StatusDialog";
 import { attendanceWorkspace } from "../attendance/workspace";
@@ -108,6 +110,7 @@ export default function NoteOfflineStatus() {
               className="button secondary"
               disabled={!state.workspace.canNavigate()}
               onClick={() => {
+                if (connectionMonitor.active()) { requestReauthentication(); return; }
                 if (state.workspace.canNavigate() && !attendanceWorkspace.getSnapshot().unsaved)
                   window.location.assign(reauthUrl());
               }}

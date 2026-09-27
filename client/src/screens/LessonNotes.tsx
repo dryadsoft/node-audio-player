@@ -1,3 +1,4 @@
+import { useRecoveryState } from "../offline/authRecovery";
 import ManagementDialog from "../components/ManagementDialog";
 import CenterManager from "../components/CenterManager";
 import InkConflictPreview from "../components/InkConflictPreview";
@@ -48,8 +49,8 @@ const EMPTY_REPLACEMENT = "__empty__";
 function LessonNotes() {
   const currentYear = new Date().getFullYear();
   const queryClient = useQueryClient();
-  const [selectedId, setSelectedId] = useState("");
-  const [selectedWeek, setSelectedWeek] = useState(1);
+  const [selectedId, setSelectedId] = useRecoveryState("notes.selected", "");
+  const [selectedWeek, setSelectedWeek] = useRecoveryState("notes.week", 1);
   const [menuCurriculumId, setMenuCurriculumId] = useState<string | null>(null);
   const [focusNotebook, setFocusNotebook] = useState(false);
   const curriculumBrowserRef = useRef<HTMLElement>(null);
@@ -99,10 +100,11 @@ function LessonNotes() {
   );
   const plans = useMemo(() => plansQuery.data || [], [plansQuery.data]);
   useEffect(() => {
+    if (!offline.hydrated) return;
     if (!selectedId && curricula.length) setSelectedId(curricula[0].id);
     if (selectedId && !curricula.some((item) => item.id === selectedId))
       setSelectedId(curricula[0]?.id || "");
-  }, [curricula, selectedId]);
+  }, [curricula, selectedId, offline.hydrated, setSelectedId]);
   const detailQuery = useLocalCurriculum(selectedId);
   const sync = useLessonNoteSync(selectedId, selectedWeek);
   const { draft, dirty, saveState, update: updateDraft } = sync;

@@ -1,3 +1,4 @@
+import { connection, isAuthenticationError } from "../api/connection";
 import { replaceStrokeGroup, strokeGroupChoice } from "../api/inkStrokeGroups";
 import { useEffect, useState } from "react";
 import { api } from "../api";
@@ -576,6 +577,10 @@ export class AttendanceWorkspace {
     }
   }
   sync = (): Promise<void> => {
+    if (connection.blocked()) {
+      this.publish({ online: false, auth: true, error: "로그인을 다시 확인해야 합니다." });
+      return Promise.resolve();
+    }
     if (this.running) return this.running;
     this.running = (async () => {
       await this.hydrate();
@@ -687,7 +692,7 @@ export class AttendanceWorkspace {
               (e.status === 0 || e.status === 401)
           ),
           auth: cycleErrors.some(
-            (e) => e instanceof AttendanceError && e.status === 401
+            (e) => isAuthenticationError(e)
           ),
           error: failure instanceof Error ? failure.message : "",
           storageError:
@@ -701,7 +706,7 @@ export class AttendanceWorkspace {
         this.failures++;
         this.publish({
           online: false,
-          auth: e instanceof AttendanceError && e.status === 401,
+          auth: isAuthenticationError(e),
           error: e instanceof Error ? e.message : "연결 실패",
         });
       } finally {

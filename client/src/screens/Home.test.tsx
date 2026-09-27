@@ -281,7 +281,7 @@ describe("Home", () => {
     );
   });
   it("shows login failure rather than an empty music folder and supports retry", async () => {
-    (window.fetch as jest.Mock).mockResolvedValue({ ok: true, status: 200, headers: new Headers({'Content-Type':'text/html'}), redirected: false });
+    (window.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 401, headers: new Headers({'Content-Type':'text/html'}), redirected: false });
     renderHome();
     expect(await screen.findByText('로그인이 필요합니다. 기존 기록은 보존됩니다.')).toBeInTheDocument();
     expect(screen.queryByText('이 폴더에 음악이 없습니다.')).not.toBeInTheDocument();

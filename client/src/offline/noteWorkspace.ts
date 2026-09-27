@@ -1,3 +1,4 @@
+import { connection } from "../api/connection";
 import { replaceStrokeGroup, strokeGroupChoice, StrokeChoice } from "../api/inkStrokeGroups";
 import { api, ApiError } from "../api";
 import {
@@ -579,6 +580,10 @@ export class NoteWorkspace {
   };
   private async run(force: boolean) {
     await this.hydrate();
+    if (connection.blocked()) {
+      this.publish({ connection: "auth", error: "로그인을 다시 확인해야 합니다." });
+      return;
+    }
     if (
       this.snapshot.storageError ||
       document.hidden ||
@@ -635,7 +640,7 @@ export class NoteWorkspace {
         } catch (error) {
           if (
             error instanceof NoteStorageError ||
-            (error instanceof ApiError && [401, 403].includes(error.status))
+            (error instanceof ApiError && error.kind === "auth")
           )
             throw error;
           downloadError = error;
@@ -657,7 +662,7 @@ export class NoteWorkspace {
       this.retryAt = 0;
     } catch (error) {
       const auth =
-        error instanceof ApiError && [401, 403].includes(error.status);
+        error instanceof ApiError && error.kind === "auth";
       const storage =
         error instanceof NoteStorageError ||
         (error instanceof DOMException &&
@@ -669,7 +674,7 @@ export class NoteWorkspace {
         this.publish({
           connection: auth
             ? "auth"
-            : error instanceof TypeError ||
+            : (error instanceof ApiError && ["network", "timeout"].includes(error.kind)) || error instanceof TypeError ||
               (error instanceof Error && error.name === "AbortError")
             ? "offline"
             : "error",

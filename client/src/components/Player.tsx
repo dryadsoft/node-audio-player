@@ -1,3 +1,5 @@
+import { usePwaUpdateGuard } from "../offline/updateGuard";
+import { checkConnection, connection } from "../api/connection";
 import React, { useEffect, useRef, useState } from "react";
 import { TrackReference } from "../types";
 
@@ -44,6 +46,8 @@ const Player: React.FC<PlayerProps> = ({ track }) => {
   const currentSourceRef = useRef("");
   const [status, setStatus] = useState<PlaybackStatus>("idle");
   const [errorMessage, setErrorMessage] = useState("");
+  const [playing, setPlaying] = useState(false);
+  usePwaUpdateGuard(playing ? "음악 재생을 마치거나 일시 정지해 주세요." : "");
   const trackPath = track?.path || "";
   const trackName = track?.name || "";
 
@@ -79,6 +83,7 @@ const Player: React.FC<PlayerProps> = ({ track }) => {
       });
     const handleError = () =>
       updateIfCurrent(() => {
+        if (connection.active()) void checkConnection();
         setStatus("error");
         setErrorMessage(
           source.requiresPreparation
@@ -130,6 +135,9 @@ const Player: React.FC<PlayerProps> = ({ track }) => {
           ref={audioRef}
           preload="metadata"
           controls
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
+          onEnded={() => setPlaying(false)}
           aria-label="오디오 플레이어"
         >
           <source ref={sourceRef} src="" data-testid="audio-source" />

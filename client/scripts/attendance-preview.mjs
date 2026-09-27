@@ -69,7 +69,7 @@ const start = async () => {
       const path = new URL(req.url, "http://localhost").pathname;
       if (path.startsWith("/api/") || path.startsWith("/songs/")) {
         if (auth && path.startsWith("/api/")) {
-          res.writeHead(200, { "content-type": "text/html" });
+          res.writeHead(401, { "content-type": "text/html" });
           res.end("<html>Test login</html>");
           return;
         }

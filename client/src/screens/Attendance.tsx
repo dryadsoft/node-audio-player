@@ -1,3 +1,5 @@
+import { connection } from "../api/connection";
+import { hasRecoveryValue, useRecoveryState, requestReauthentication } from "../offline/authRecovery";
 import InkConflictPreview from "../components/InkConflictPreview";
 import { usePwaUpdateGuard } from "../offline/updateGuard";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -21,13 +23,13 @@ const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
 export default function Attendance() {
   const state = useAttendance(),
     { workspace } = state;
-  const [view, setView] = useState<Term>({
+  const [view, setView] = useRecoveryState<Term>("attendance.view", {
       year: new Date().getFullYear(),
       term: "fall",
-    }),
-    [centerId, setCenterId] = useState(""),
-    [periodId, setPeriodId] = useState(""),
-    [pageId, setPageId] = useState("");
+    }, (v): v is Term => !!v && typeof v === "object" && Number.isInteger((v as Term).year) && Object.prototype.hasOwnProperty.call(terms, (v as Term).term)),
+    [centerId, setCenterId] = useRecoveryState("attendance.center", ""),
+    [periodId, setPeriodId] = useRecoveryState("attendance.period", ""),
+    [pageId, setPageId] = useRecoveryState("attendance.page", "");
   const [panel, setPanel] = useState(false),
     [addMenu, setAddMenu] = useState(false),
     [details, setDetails] = useState(false),
@@ -53,10 +55,11 @@ export default function Attendance() {
   useEffect(() => {
     if (state.hydrated && !chosenInitial.current) {
       chosenInitial.current = true;
+      if (hasRecoveryValue("attendance.view")) return;
       if (state.target) setView(state.target);
       else setPanel(true);
     }
-  }, [state.hydrated, state.target]);
+  }, [state.hydrated, state.target, setView]);
   useEffect(() => {
     workspace.setView(view);
   }, [workspace, view]);
@@ -78,6 +81,7 @@ export default function Attendance() {
   );
   const period = periods.find((p) => p.id === periodId);
   useEffect(() => {
+    if (!catalog) return;
     if (!centers.some((c) => c.id === centerId))
       setCenterId(
         centers.find(
@@ -86,11 +90,12 @@ export default function Attendance() {
             false
         )?.id || ""
       );
-  }, [centers, centerId, catalog]);
+  }, [centers, centerId, catalog, setCenterId]);
   useEffect(() => {
+    if (!catalog || !center) return;
     if (!periods.some((p) => p.id === periodId))
       setPeriodId(periods[0]?.id || "");
-  }, [periods, periodId]);
+  }, [periods, periodId, catalog, center, setPeriodId]);
   const pages = useMemo(() => {
     const map = new Map<string, PageMeta>();
     catalog?.pages
@@ -110,8 +115,9 @@ export default function Attendance() {
       .sort((a, b) => a.position - b.position || a.id.localeCompare(b.id));
   }, [catalog, periodId, state.pages]);
   useEffect(() => {
+    if (!state.hydrated || !catalog || !period) return;
     if (!pages.some((p) => p.id === pageId)) setPageId(pages[0]?.id || "");
-  }, [pages, pageId]);
+  }, [pages, pageId, state.hydrated, catalog, period, setPageId]);
   const record = state.pages.find((p) => p.id === pageId),
     ready = record?.photoReady,
     isNote = record?.local.pageType === "note",
@@ -319,7 +325,7 @@ export default function Attendance() {
           {state.auth && (
             <button
               disabled={!!state.unsaved}
-              onClick={() => window.location.assign("/attendance?reauth=1")}
+              onClick={() => connection.active() ? requestReauthentication() : window.location.assign("/attendance?reauth=1")}
             >
               다시 로그인
             </button>

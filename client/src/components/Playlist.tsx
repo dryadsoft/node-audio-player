@@ -1,3 +1,4 @@
+import { usePwaUpdateGuard } from "../offline/updateGuard";
 import { FormEvent, useEffect, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import {
@@ -109,6 +110,7 @@ const Playlist = ({
   onDownload,
 }: PlaylistPanelProps) => {
   const [isRenaming, setIsRenaming] = useState(false);
+  usePwaUpdateGuard(isRenaming ? "재생목록 이름 입력을 마쳐 주세요." : "");
   const [title, setTitle] = useState(selectedPlaylist?.title || "");
   const { setNodeRef, isOver } = useDroppable({ id: "playlist-drop" });
 

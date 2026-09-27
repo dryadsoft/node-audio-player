@@ -1,3 +1,4 @@
+import { failureKind, FailureKind, RequestError, requestData } from "./connection";
 import {
   DeleteLessonCurriculumResult,
   LibraryResponse,
@@ -13,45 +14,16 @@ import {
   SavedPlaylist,
 } from "../types";
 
-export class ApiError extends Error {
-  constructor(message: string, public status: number) {
-    super(message);
+export class ApiError extends RequestError {
+  constructor(message: string, status: number, kind: FailureKind = failureKind(status)) {
+    super(message, status, kind);
   }
 }
-
 const request = async <T>(url: string, options?: RequestInit): Promise<T> => {
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 10000);
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      ...options,
-      signal: controller.signal,
-      cache: "no-store",
-      headers: { "Content-Type": "application/json", ...options?.headers },
-    });
-    if (
-      (response.redirected || response.status === 401 || response.status === 403 ||
-        (response.ok && response.status !== 204 &&
-          !response.headers.get("content-type")?.includes("application/json")))
-    ) {
-      throw new ApiError("로그인이 필요합니다. 기기 기록은 보존됩니다.", 401);
-    }
-
-    if (!response.ok) {
-      const payload = await response.json().catch(() => null);
-      throw new ApiError(
-        payload?.message || "요청을 처리하지 못했습니다.",
-        response.status
-      );
-    }
-
-    if (response.status === 204) {
-      return undefined as unknown as T;
-    }
-    return await response.json();
-  } finally {
-    if (timeout !== undefined) window.clearTimeout(timeout);
+  try { return await requestData<T>(url, options); }
+  catch (error) {
+    if (error instanceof RequestError) throw new ApiError(error.message, error.status, error.kind);
+    throw error;
   }
 };
 

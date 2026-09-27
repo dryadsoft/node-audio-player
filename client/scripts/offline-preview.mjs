@@ -39,12 +39,17 @@ const server = createServer(async (req, res) => {
       });
       res.end(JSON.stringify(value));
     };
-    if (url.searchParams.has("reauth")) auth = false;
+    if (url.searchParams.has("reauth") && auth !== "loop") auth = false;
     if (auth && url.pathname.startsWith("/api/")) {
-      res.writeHead(200, { "Content-Type": "text/html" });
+      if (auth === "redirect") {
+        res.writeHead(302, { Location: `http://127.0.0.1:${port + 1}/login` });
+        res.end(); return;
+      }
+      res.writeHead(401, { "Content-Type": "text/html" });
       res.end("<h1>Fixture login required</h1>");
       return;
     }
+    if (url.pathname === "/api/connection") { json({ ok: true }); return; }
     if (url.pathname === "/api/lesson-curricula") {
       json(notes.map(summary));
       return;
@@ -94,7 +99,7 @@ const server = createServer(async (req, res) => {
     }
     if (url.pathname.startsWith("/api/")) {
       json(
-        url.pathname === "/api/playlist" ? { directory: [], playlist: [] } : []
+        url.pathname === "/api/playlist" ? { directory: url.searchParams.get("dir") ? [] : [{ name: "한글 수업" }], playlist: url.searchParams.get("dir") ? [{ name: "첫 곡.mp3" }] : [] } : []
       );
       return;
     }
@@ -134,6 +139,8 @@ const server = createServer(async (req, res) => {
     res.end("Fixture error");
   }
 });
+const loginServer = createServer((_req, res) => { res.writeHead(200, { "Content-Type": "text/html" }); res.end("Fixture login on another origin"); });
+loginServer.listen(port + 1, "127.0.0.1");
 const listen = () =>
   server.listen(port, "127.0.0.1", () =>
     console.log(`Preview: http://127.0.0.1:${port}/lesson-notes`)
@@ -154,6 +161,11 @@ createInterface({ input: process.stdin }).on("line", (line) => {
     );
   }
   if (line === "online" && !server.listening) listen();
+  if (line === "auth-redirect" || line === "auth-loop") {
+    auth = line === "auth-redirect" ? "redirect" : "loop";
+    console.log(`Fixture ${line} enabled.`);
+  }
+  if (line === "clear-auth") { auth = false; console.log("Fixture authentication restored."); }
   if (line === "auth") {
     auth = true;
     console.log("Fixture authentication expired.");
@@ -179,6 +191,7 @@ createInterface({ input: process.stdin }).on("line", (line) => {
       )
     );
   if (line === "quit") {
+    loginServer.close();
     server.closeAllConnections();
     server.close();
     process.exit(0);

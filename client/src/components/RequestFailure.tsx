@@ -1,3 +1,5 @@
+import { connection } from "../api/connection";
+import { requestReauthentication } from "../offline/authRecovery";
 import { useContext, useState } from "react";
 import { ApiError } from "../api";
 import { NoteWorkspaceContext } from "../offline/useNoteWorkspace";
@@ -8,7 +10,8 @@ export default function RequestFailure({ error, retry }: { error: unknown; retry
   const notes = useContext(NoteWorkspaceContext);
   const [blocked, setBlocked] = useState(false);
   if (!error) return null;
-  const auth = error instanceof ApiError && [401, 403].includes(error.status);
+  const auth = error instanceof ApiError && error.kind === "auth";
+  if (auth && connection.active()) return null;
   const message = auth ? "로그인이 필요합니다. 기존 기록은 보존됩니다."
     : error instanceof ApiError ? error.message
     : "서버에 연결하지 못했습니다. 연결 상태를 확인하고 다시 시도하세요.";
@@ -16,6 +19,7 @@ export default function RequestFailure({ error, retry }: { error: unknown; retry
     <span>{message}</span>
     <button type="button" className="button secondary" onClick={retry}>다시 시도</button>
     <button type="button" className="button secondary" onClick={() => {
+      if (connection.active()) { requestReauthentication(); return; }
       if (!notes.canNavigate() || attendanceWorkspace.getSnapshot().unsaved) {
         setBlocked(true); return;
       }

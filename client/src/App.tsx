@@ -1,3 +1,4 @@
+import ConnectionRecovery from "./components/ConnectionRecovery";
 import PwaUpdateNotice from "./components/PwaUpdateNotice";
 import Attendance from "./screens/Attendance";
 import { AttendanceLifecycle } from "./attendance/workspace";
@@ -14,6 +15,7 @@ function App() {
       <NoteWorkspaceLifecycle />
       <AttendanceLifecycle />
       <PwaUpdateNotice />
+      <ConnectionRecovery />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Home />} />

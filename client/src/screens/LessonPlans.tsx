@@ -1,3 +1,4 @@
+import { useRecoveryState } from "../offline/authRecovery";
 import { usePwaUpdateGuard } from "../offline/updateGuard";
 import RequestFailure from "../components/RequestFailure";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -90,11 +91,11 @@ const completedWeekCount = (weeks: LessonWeek[]) =>
 function LessonPlans() {
   const queryClient = useQueryClient();
   const currentYear = new Date().getFullYear();
-  const [year, setYear] = useState(currentYear);
-  const [term, setTerm] = useState<LessonTerm | "">("");
-  const [locationId, setLocationId] = useState("");
-  const [programName, setProgramName] = useState("");
-  const [selectedPlanId, setSelectedPlanId] = useState("");
+  const [year, setYear] = useRecoveryState("plans.year", currentYear);
+  const [term, setTerm] = useRecoveryState<LessonTerm | "">("plans.term", "");
+  const [locationId, setLocationId] = useRecoveryState("plans.location", "");
+  const [programName, setProgramName] = useRecoveryState("plans.program", "");
+  const [selectedPlanId, setSelectedPlanId] = useRecoveryState("plans.selected", "");
   const [editor, setEditor] = useState<EditorDraft>();
   const [managing, setManaging] = useState(false),
     [centersBusy, setCentersBusy] = useState(false);
@@ -141,7 +142,7 @@ function LessonPlans() {
   useEffect(() => {
     if (locationId && locations.some((l) => l.id === locationId && !l.active))
       setLocationId("");
-  }, [locations, locationId]);
+  }, [locations, locationId, setLocationId]);
   const programNames = useMemo(
     () =>
       Array.from(new Set(plans.map((plan) => plan.programName))).sort((a, b) =>
@@ -169,11 +170,11 @@ function LessonPlans() {
   );
 
   useEffect(() => {
-    if (editor) return;
+    if (editor || !plansQuery.data) return;
     if (!filteredPlans.some((plan) => plan.id === selectedPlanId)) {
       setSelectedPlanId(filteredPlans[0]?.id || "");
     }
-  }, [editor, filteredPlans, selectedPlanId]);
+  }, [editor, filteredPlans, selectedPlanId, plansQuery.data, setSelectedPlanId]);
 
   useEffect(() => {
     if (!notice) return;

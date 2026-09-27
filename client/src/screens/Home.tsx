@@ -1,3 +1,5 @@
+import { useRecoveryState } from "../offline/authRecovery";
+import { usePwaUpdateGuard } from "../offline/updateGuard";
 import RequestFailure from "../components/RequestFailure";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -95,12 +97,12 @@ const LibraryTrackRow = ({ track, added, onPlay, onAdd }: LibraryTrackRowProps) 
 function Home() {
   const queryClient = useQueryClient();
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [path, setPath] = useState<string[]>([]);
-  const [keyword, setKeyword] = useState("");
-  const [searchActive, setSearchActive] = useState(false);
+  const [path, setPath] = useRecoveryState<string[]>("music.path", []);
+  const [keyword, setKeyword] = useRecoveryState("music.keyword", "");
+  const [searchActive, setSearchActive] = useRecoveryState("music.search", false);
   const [playingTrack, setPlayingTrack] = useState<TrackReference>();
-  const [selectedPlaylistId, setSelectedPlaylistId] = useState("");
-  const [mobileTab, setMobileTab] = useState<"library" | "playlists">("library");
+  const [selectedPlaylistId, setSelectedPlaylistId] = useRecoveryState("music.playlist", "");
+  const [mobileTab, setMobileTab] = useRecoveryState<"library" | "playlists">("music.tab", "library");
   const [notice, setNotice] = useState<Notice>();
   const [activeDragName, setActiveDragName] = useState("");
   const [createDialog, setCreateDialog] = useState<{ open: boolean; path?: string }>({
@@ -110,6 +112,7 @@ function Home() {
   const [downloadStatus, setDownloadStatus] =
     useState<PlaylistDownloadStatus>();
 
+  usePwaUpdateGuard(createDialog.open ? "재생목록 입력을 마쳐 주세요." : "");
   const directory = path.join("/");
   const libraryQuery = useQuery<LibraryResponse>(
     ["playList", directory],
@@ -118,6 +121,14 @@ function Home() {
   const searchQuery = useQuery<string[]>(["search", keyword], api.search, {
     enabled: false,
   });
+  const restoredSearch = useRef(searchActive);
+  const refetchSearch = searchQuery.refetch;
+  useEffect(() => {
+    if (restoredSearch.current) {
+      restoredSearch.current = false;
+      void refetchSearch();
+    }
+  }, [refetchSearch]);
   const playlistsQuery = useQuery<SavedPlaylist[]>("playlists", api.playlists);
   const playlists = useMemo(() => playlistsQuery.data || [], [playlistsQuery.data]);
   const selectedPlaylist = playlists.find(
@@ -128,7 +139,7 @@ function Home() {
     if (!selectedPlaylist && playlists.length > 0) {
       setSelectedPlaylistId(playlists[0].id);
     }
-  }, [playlists, selectedPlaylist]);
+  }, [playlists, selectedPlaylist, setSelectedPlaylistId]);
 
   useEffect(() => {
     if (!notice) return;
