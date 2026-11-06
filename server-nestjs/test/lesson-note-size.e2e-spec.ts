@@ -21,6 +21,7 @@ describe('Lesson note request limits', () => {
     app = module.createNestApplication(undefined, { bodyParser: false });
     configureBodyParsers(app);
     await app.init();
+    await app.listen(0, '127.0.0.1');
     id = app.get(LessonCurriculumService).create({ year: 2026, term: 'fall', programName: '용량 검증' }).id;
   });
   afterAll(async () => {

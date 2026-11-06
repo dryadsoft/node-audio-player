@@ -50,6 +50,10 @@ const prune = () =>
       cleanup = undefined;
     }));
 self.addEventListener("message", (event) => {
+  if (event.data?.type === "AUTH_CLIENT_COUNT") {
+    event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true })
+      .then(windows => event.ports[0]?.postMessage({ count: windows.length })));
+  }
   if (event.data?.type === "GET_BUILD") {
     event.ports[0]?.postMessage({ buildId });
     event.waitUntil(prune());

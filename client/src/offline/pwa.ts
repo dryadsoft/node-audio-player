@@ -197,6 +197,8 @@ export function withoutReauth(href: string) {
 }
 export function reauthUrl(href = window.location.href) {
   const url = new URL(href);
-  url.searchParams.set("reauth", "1");
-  return `${url.pathname}${url.search}${url.hash}`;
+  url.searchParams.delete("reauth");
+  url.searchParams.delete("authError");
+  url.searchParams.delete("loggedOut");
+  return `/api/auth/google/start?returnTo=${encodeURIComponent(`${url.pathname}${url.search}${url.hash}`)}`;
 }

@@ -23,6 +23,7 @@ describe('Attendance API', () => {
     }).compile();
     app = module.createNestApplication();
     await app.init();
+    await app.listen(0, '127.0.0.1');
     locationId = new LessonLocationService(app.get(SqliteService)).create(
       '사진 센터',
     ).id;

@@ -55,7 +55,7 @@ export const connection = {
   getSnapshot: () => state,
   active: () => managed > 0,
   writes: () => writes,
-  blocked: () => managed > 0 && state.phase === "auth",
+  blocked: () => managed > 0 && (state.phase === "auth" || state.phase === "forbidden"),
   subscribe(listener: () => void) {
     listeners.add(listener);
     return () => {
@@ -158,9 +158,12 @@ export async function requestData<T>(
               ? "invalid"
               : "network"
           );
-    if (requestGeneration === generation && failure.kind === "auth") {
+    if (failure.kind === "auth" || failure.kind === "forbidden") {
+      try { localStorage.setItem('nmp.auth.denied', '1'); } catch { /* Keep the error visible. */ }
+    }
+    if (requestGeneration === generation && (failure.kind === "auth" || failure.kind === "forbidden")) {
       generation++;
-      publish("auth", failure.message);
+      publish(failure.kind, failure.message);
     }
     throw failure;
   } finally {

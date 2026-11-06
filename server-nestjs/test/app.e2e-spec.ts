@@ -1,20 +1,35 @@
+import { AbstractLoader } from '@nestjs/serve-static/dist/loaders/abstract.loader';
+import { ExpressLoader } from '@nestjs/serve-static/dist/loaders/express.loader';
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { promises as fs } from 'fs';
 import { tmpdir } from 'os';
 import { resolve } from 'path';
-import * as request from 'supertest';
+import * as rawRequest from 'supertest';
+import { AuthService, SESSION_COOKIE } from '../src/auth/auth.service';
 import { AppModule } from './../src/app.module';
 import { FfmpegService } from './../src/audio/ffmpeg.service';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication;
   let temporaryDirectory: string;
+  let sessionCookie: string;
+  const request = (server: any) => {
+    const agent = rawRequest.agent(server);
+    agent.set('Cookie', sessionCookie);
+    agent.set('Origin', 'https://music.example.test');
+    agent.set('X-Requested-With', 'XMLHttpRequest');
+    return agent;
+  };
 
   beforeEach(async () => {
     temporaryDirectory = await fs.mkdtemp(
       resolve(tmpdir(), 'node-audio-player-e2e-'),
     );
+    process.env.AUTH_ORIGIN = 'https://music.example.test';
+    process.env.AUTH_GOOGLE_CLIENT_ID = 'test-client';
+    process.env.AUTH_GOOGLE_CLIENT_SECRET = 'test-secret';
+    process.env.AUTH_DB_PATH = resolve(temporaryDirectory, 'auth.sqlite');
     const musicRoot = resolve(temporaryDirectory, 'music/songs');
     process.env.MUSIC_ROOT_PATH = musicRoot;
     process.env.AUDIO_CACHE_PATH = resolve(temporaryDirectory, 'audio-cache');
@@ -36,6 +51,7 @@ describe('AppController (e2e)', () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
+      .overrideProvider(AbstractLoader).useClass(ExpressLoader)
       .overrideProvider(FfmpegService)
       .useValue({
         transcode: async (_inputPath: string, outputPath: string) => {
@@ -49,16 +65,48 @@ describe('AppController (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     await app.init();
+    await app.listen(0, '127.0.0.1');
+    const store = app.get(AuthService).store;
+    store.allow('test@example.test');
+    sessionCookie = SESSION_COOKIE + '=' + store.issue({ sub: 'test-sub', email: 'test@example.test' });
   });
 
   afterEach(async () => {
     await app.close();
+    for (const key of ['AUTH_ORIGIN', 'AUTH_GOOGLE_CLIENT_ID', 'AUTH_GOOGLE_CLIENT_SECRET', 'AUTH_DB_PATH']) delete process.env[key];
     delete process.env.MUSIC_ROOT_PATH;
     delete process.env.AUDIO_CACHE_PATH;
     delete process.env.DOWNLOAD_WORK_PATH;
     delete process.env.PLAYLIST_DATA_PATH;
     delete process.env.LESSON_PLAN_DB_PATH;
     await fs.rm(temporaryDirectory, { recursive: true, force: true });
+  });
+
+  it('blocks every private surface before controllers and static file serving', async () => {
+    for (const path of ['/api/connection', '/api/playlist', '/songs/missing.mp3', '/api/audio?path=a.mp3', '/api/attendance/pages/1/photo', '/api/playlist-downloads/1/file', '/arbitrary-static-file']) {
+      await rawRequest(app.getHttpServer()).get(path).expect(401);
+    }
+  });
+
+  it('serves protected Korean audio paths with Range support and no shared caching', async () => {
+    const path = '/songs/' + encodeURIComponent('수업 음악') + '/' + encodeURIComponent('둘째 곡.mp3');
+    await rawRequest(app.getHttpServer()).get(path).expect(401);
+    await request(app.getHttpServer()).get(path).set('Range', 'bytes=0-1')
+      .expect(206).expect('Cache-Control', 'private, no-store');
+  });
+
+  it('requires CSRF protection and revokes the current session', async () => {
+    await rawRequest(app.getHttpServer()).post('/api/auth/logout').set('Cookie', sessionCookie).expect(403);
+    await request(app.getHttpServer()).get('/api/auth/session').expect(200)
+      .expect(r => expect(r.body.authenticated).toBe(true));
+    await request(app.getHttpServer()).post('/api/auth/logout').expect(204);
+    await request(app.getHttpServer()).get('/api/connection').expect(401);
+    await request(app.getHttpServer()).post('/api/auth/logout').expect(204);
+  });
+
+  it('does not accept a fabricated OAuth callback', async () => {
+    await rawRequest(app.getHttpServer()).get('/api/auth/google/callback?state=fake&code=fake')
+      .expect(302).expect('Location', '/?authError=login');
   });
 
   it('/api/connection (GET) is an uncached origin probe without user data', () => {

@@ -44,6 +44,12 @@ const empty: AttendanceState = {
   unsaved: 0,
 };
 export class AttendanceWorkspace {
+  private suspended = false;
+  async suspendForLogout() {
+    this.suspended = true;
+    window.clearTimeout(this.timer);
+    await this.running;
+  }
   private state: AttendanceState = { ...empty };
   private listeners = new Set<() => void>();
   private hydration?: Promise<void>;
@@ -577,6 +583,7 @@ export class AttendanceWorkspace {
     }
   }
   sync = (): Promise<void> => {
+    if (this.suspended) return Promise.resolve();
     if (connection.blocked()) {
       this.publish({ online: false, auth: true, error: "로그인을 다시 확인해야 합니다." });
       return Promise.resolve();

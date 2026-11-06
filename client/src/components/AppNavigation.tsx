@@ -1,8 +1,11 @@
+import { useContext } from "react";
+import { AuthContext } from "../auth/AuthGate";
 import { NavLink } from "react-router-dom";
 import { FiBookOpen, FiEdit3, FiMoon, FiMusic, FiSun } from "react-icons/fi";
 import { useTheme } from "../context/ThemeContext";
 
 function AppNavigation() {
+  const { user, logout } = useContext(AuthContext);
   const { theme, toggleTheme } = useTheme();
   const lightMode = theme === "light";
 
@@ -23,6 +26,7 @@ function AppNavigation() {
         </NavLink>
         <NavLink to="/attendance"><FiEdit3 />출석부</NavLink>
       </div>
+      {user && <div className="auth-account"><span>{user.email}</span><button className="button secondary" onClick={logout}>로그아웃</button></div>}
       <button
         type="button"
         className="theme-toggle"

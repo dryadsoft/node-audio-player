@@ -15,6 +15,10 @@ const done = (tx: IDBTransaction) =>
 export class AttendanceStore {
   private connection?: Promise<IDBDatabase>;
   constructor(private name = "node-audio-player-attendance") {}
+  async close() {
+    (await this.connection)?.close();
+    this.connection = undefined;
+  }
   private db() {
     return (
       this.connection ||

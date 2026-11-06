@@ -1,3 +1,4 @@
+import { AuthModule } from './auth/auth.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { Module } from '@nestjs/common';
 import { ServeStaticModule } from '@nestjs/serve-static';
@@ -12,8 +13,13 @@ import { PlaylistModule } from './playlist/playlist.module';
 
 @Module({
   imports: [
-    ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'music'),
+    AuthModule,
+    ServeStaticModule.forRootAsync({
+      useFactory: () => [{
+        rootPath: process.env.MUSIC_ROOT_PATH || join(__dirname, '..', 'music', 'songs'),
+        serveRoot: '/songs',
+        serveStaticOptions: { index: false, dotfiles: 'deny', setHeaders: (res) => res.setHeader('Cache-Control', 'private, no-store') },
+      }],
     }),
     AttendanceModule,
     ApiModule,

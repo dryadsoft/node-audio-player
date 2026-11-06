@@ -26,7 +26,8 @@
     "lesson-plans:extract": "node scripts/extract-lesson-plans.mjs",
     "lesson-plans:extract:test": "node --test scripts/extract-lesson-plans.test.mjs",
     "lesson-plans:import": "node dist/database/import-lesson-plans.js",
-    "attendance:backup": "node dist/attendance/backup.js"
+    "attendance:backup": "node dist/attendance/backup.js",
+    "auth:admin": "node dist/auth/admin.js"
   },
   "dependencies": {
     "@nestjs/common": "^8.0.0",
@@ -34,6 +35,7 @@
     "@nestjs/platform-express": "^8.0.0",
     "@nestjs/serve-static": "^2.2.2",
     "docx": "9.7.1",
+    "google-auth-library": "10.5.0",
     "reflect-metadata": "^0.1.13",
     "rimraf": "^3.0.2",
     "rxjs": "^7.2.0",

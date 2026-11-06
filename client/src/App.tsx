@@ -1,3 +1,4 @@
+import AuthGate from "./auth/AuthGate";
 import ConnectionRecovery from "./components/ConnectionRecovery";
 import PwaUpdateNotice from "./components/PwaUpdateNotice";
 import Attendance from "./screens/Attendance";
@@ -12,6 +13,7 @@ import LessonNotes from "./screens/LessonNotes";
 function App() {
   return (
     <ThemeProvider>
+      <AuthGate>
       <NoteWorkspaceLifecycle />
       <AttendanceLifecycle />
       <PwaUpdateNotice />
@@ -25,6 +27,7 @@ function App() {
           <Route path="/search" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
+    </AuthGate>
     </ThemeProvider>
   );
 }

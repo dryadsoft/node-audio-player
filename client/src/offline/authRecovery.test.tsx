@@ -9,7 +9,7 @@ afterEach(() => sessionStorage.clear());
 it("allows one automatic attempt until confirmed recovery, with explicit manual retry", () => {
   const navigate = jest.fn();
   expect(beginAuthRecovery(false, navigate)).toBe(true);
-  expect(navigate).toHaveBeenCalledWith("/?reauth=1");
+  expect(navigate).toHaveBeenCalledWith("/api/auth/google/start?returnTo=%2F");
   expect(beginAuthRecovery(false, navigate)).toBe(false);
   expect(beginAuthRecovery(true, navigate)).toBe(true);
   clearAuthAttempt();

@@ -65,6 +65,12 @@ const message = (error: unknown) =>
   error instanceof Error ? error.message : "요청을 처리하지 못했습니다.";
 
 export class NoteWorkspace {
+  private suspended = false;
+  async suspendForLogout() {
+    this.suspended = true;
+    window.clearTimeout(this.timer);
+    await this.cycle;
+  }
   private snapshot: WorkspaceSnapshot = {
     notes: [],
     curricula: [],
@@ -571,6 +577,7 @@ export class NoteWorkspace {
     }
   }
   refresh = (force = false): Promise<void> => {
+    if (this.suspended) return Promise.resolve();
     if (this.cycle)
       return force ? this.cycle.then(() => this.refresh(true)) : this.cycle;
     this.cycle = this.run(force).finally(() => {
