@@ -1,3 +1,4 @@
+import { audioStream } from "./audio/stream";
 /* eslint-disable no-restricted-globals */
 import { clientsClaim, cacheNames, setCacheNameDetails } from "workbox-core";
 import {
@@ -62,6 +63,8 @@ addPlugins([
       validatePrecacheResponse(request, response, buildId),
   },
 ]);
+registerRoute(({url, request}) => request.method === "GET" && url.origin === self.location.origin && url.pathname.startsWith("/songs/") && url.searchParams.get("nmpAudio") === "1", audioStream);
+
 precacheAndRoute([
   ...self.__WB_MANIFEST,
   { url: "/attendance-photo-worker.js", revision: "fa65e8e6cdcd7dce" },

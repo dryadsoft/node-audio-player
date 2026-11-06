@@ -36,11 +36,12 @@ const getSource = (path: string) => {
 
 interface PlayerProps {
   track?: TrackReference;
+  cache?: { select(path: string): string | null; invalidate(path: string): void; setPlaying(value: boolean): void };
 }
 
 type PlaybackStatus = "idle" | "preparing" | "ready" | "error";
 
-const Player: React.FC<PlayerProps> = ({ track }) => {
+const Player: React.FC<PlayerProps> = ({ track, cache }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const sourceRef = useRef<HTMLSourceElement>(null);
   const currentSourceRef = useRef("");
@@ -71,6 +72,7 @@ const Player: React.FC<PlayerProps> = ({ track }) => {
     }
 
     const source = getSource(trackPath);
+    source.src = cache?.select(trackPath) || source.src;
     currentSourceRef.current = source.src;
 
     const updateIfCurrent = (callback: () => void) => {
@@ -81,8 +83,18 @@ const Player: React.FC<PlayerProps> = ({ track }) => {
         setStatus("ready");
         setErrorMessage("");
       });
+    let recovered = false;
     const handleError = () =>
       updateIfCurrent(() => {
+        if (!recovered && source.src.includes("?nmpAudio=1")) {
+          recovered = true;
+          cache?.invalidate(trackPath);
+          sourceElement.src = getSource(trackPath).src;
+          audio.load();
+          void audio.play().catch(() => setErrorMessage("재생 버튼을 눌러주세요."));
+          return;
+        }
+        cache?.setPlaying(false);
         if (connection.active()) void checkConnection();
         setStatus("error");
         setErrorMessage(
@@ -104,6 +116,7 @@ const Player: React.FC<PlayerProps> = ({ track }) => {
     const playPromise = audio.play();
     playPromise?.catch((error: DOMException) => {
       if (error.name === "AbortError") return;
+      cache?.setPlaying(false);
       updateIfCurrent(() => {
         setStatus("error");
         setErrorMessage(
@@ -119,7 +132,7 @@ const Player: React.FC<PlayerProps> = ({ track }) => {
       audio.removeEventListener("playing", handleCanPlay);
       audio.removeEventListener("error", handleError);
     };
-  }, [trackName, trackPath]);
+  }, [trackName, trackPath, cache]);
 
   const nowPlaying =
     status === "preparing"
@@ -135,9 +148,9 @@ const Player: React.FC<PlayerProps> = ({ track }) => {
           ref={audioRef}
           preload="metadata"
           controls
-          onPlay={() => setPlaying(true)}
-          onPause={() => setPlaying(false)}
-          onEnded={() => setPlaying(false)}
+          onPlay={() => { setPlaying(true); cache?.setPlaying(true); }}
+          onPause={() => { setPlaying(false); cache?.setPlaying(false); }}
+          onEnded={() => { setPlaying(false); cache?.setPlaying(false); }}
           aria-label="오디오 플레이어"
         >
           <source ref={sourceRef} src="" data-testid="audio-source" />

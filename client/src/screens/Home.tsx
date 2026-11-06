@@ -1,3 +1,4 @@
+import { createPreloader } from "../audio/preload";
 import { useRecoveryState } from "../offline/authRecovery";
 import { usePwaUpdateGuard } from "../offline/updateGuard";
 import RequestFailure from "../components/RequestFailure";
@@ -96,6 +97,8 @@ const LibraryTrackRow = ({ track, added, onPlay, onAdd }: LibraryTrackRowProps) 
 
 function Home() {
   const queryClient = useQueryClient();
+  const [audioCache] = useState(() => createPreloader());
+  useEffect(() => { audioCache.start(); return () => audioCache.dispose(); }, [audioCache]);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [path, setPath] = useRecoveryState<string[]>("music.path", []);
   const [keyword, setKeyword] = useRecoveryState("music.keyword", "");
@@ -134,6 +137,8 @@ function Home() {
   const selectedPlaylist = playlists.find(
     (playlist) => playlist.id === selectedPlaylistId
   );
+
+  useEffect(() => { audioCache.setTracks(selectedPlaylist?.tracks || []); }, [audioCache, selectedPlaylist]);
 
   useEffect(() => {
     if (!selectedPlaylist && playlists.length > 0) {
@@ -386,7 +391,7 @@ function Home() {
         <header className="compact-header player-header">
           <h1>오감별 음악</h1>
           <div className="player-block">
-            <Player track={playingTrack} />
+            <Player track={playingTrack} cache={audioCache} />
           </div>
         </header>
 
