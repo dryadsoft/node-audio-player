@@ -1,5 +1,8 @@
 # PWA 인증 만료 복구
 
+> 앱 자체 지속 로그인 전환 절차는 [persistent-login.md](persistent-login.md)를 참조한다.
+> 아래 Access 설정은 전환 완료 전의 기존 보호 및 롤백 기준이다.
+
 ## 원인과 동작
 
 Cloudflare Access 로그인 만료 후 기존 fetch는 로그인 페이지로의 교차 출처 이동을 따라가다가 `TypeError: Failed to fetch`를 반환했다. 실제 네트워크 장애와 구분되지 않아 음악·강의계획서 화면에서 재로그인을 안내하지 못했다. Safari에서 로그인해도 설치된 PWA의 인증 상태가 함께 복구된다고 가정하면 안 된다.

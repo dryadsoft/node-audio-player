@@ -1,5 +1,8 @@
 # Raspberry Pi + Cloudflare Access 보안 원격 접속 런북
 
+> 앱 자체 지속 로그인 전환 절차는 [persistent-login.md](persistent-login.md)를 참조한다.
+> 아래 Access 설정은 전환 완료 전의 기존 보호 및 롤백 기준이다.
+
 이 문서는 Raspberry Pi에서 실행 중인 웹 애플리케이션을 외부에 직접
 포트 포워딩하지 않고, 지정한 Google 계정만 접속할 수 있도록 구성하는
 재사용 절차다.

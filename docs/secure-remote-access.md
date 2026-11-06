@@ -1,5 +1,8 @@
 # Secure remote access
 
+> 앱 자체 지속 로그인 전환 절차는 [persistent-login.md](persistent-login.md)를 참조한다.
+> 아래 Access 설정은 전환 완료 전의 기존 보호 및 롤백 기준이다.
+
 ## Target architecture
 
 ```text
